@@ -1,0 +1,15 @@
+{
+  "folders": [
+    {
+      "path": "../MyHerdApp",
+    },
+    {
+      "path": ".",
+    },
+  ],
+  "settings": {
+   // "liveServer.settings.multiRootWorkspaceName": "MyHerdApp",
+   // "liveServer.settings.port": 5501,
+    "files.autoGuessEncoding": true,
+  },
+}
