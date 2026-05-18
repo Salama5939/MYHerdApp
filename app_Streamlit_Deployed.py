@@ -17,7 +17,6 @@ menu = st.sidebar.radio(
         "Herd Registry & Intake",
         "Birth Event Registration",
         "Fattening Performance Log",
-        "Sales & Off-take Portal",  # <-- New Module Here!
         "Feed Inventory Controller",
         "Data Entry Corrections",
     ],
@@ -30,28 +29,15 @@ if menu == "Strategic Dashboard":
     df_herd = database.get_table_data("herd")
     df_inv = database.get_table_data("inventory")
 
-    # Pre-calculate sales data arrays for top-row financial metrics
-    sales_df = (
-        df_herd[df_herd["category"].isin(["Sold", "Slaughtered"])]
-        if not df_herd.empty
-        else pd.DataFrame()
-    )
-
-    total_offtake_qty = len(sales_df)
-    total_revenue_amount = sales_df["sale_price"].sum() if not sales_df.empty else 0.0
-
     # Render upper KPI row metric indicator displays
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3 = st.columns(3)
     with c1:
-        st.metric(
-            "Total Active Head Count",
-            len(df_herd[~df_herd["category"].isin(["Sold", "Slaughtered"])]),
-        )
+        st.metric("Total Head Count", len(df_herd))
     with c2:
         preg_count = (
             len(df_herd[df_herd["category"] == "Pregnant"]) if not df_herd.empty else 0
         )
-        st.metric("Gestation Pipeline", preg_count)
+        st.metric("Gestation Pipeline (Pregnants)", preg_count)
     with c3:
         low_stock = (
             len(df_inv[df_inv["quantity_kg"] <= df_inv["reorder_level_kg"]])
@@ -59,51 +45,17 @@ if menu == "Strategic Dashboard":
             else 0
         )
         st.metric(
-            "Low Feed Alerts",
+            "Low Feed Inventory Alerts",
             low_stock,
-            delta=f"-{low_stock} Items" if low_stock > 0 else "Normal",
+            delta=f"-{low_stock} Critical Items" if low_stock > 0 else "Normal",
             delta_color="inverse" if low_stock > 0 else "normal",
         )
-    with c4:
-        # Dashboard requirement: Sum Qty Sold/Slaughtered
-        st.metric("Total Sold/Slaughtered", f"{total_offtake_qty} Heads")
-    with c5:
-        # Dashboard requirement: Total Amount Sold
-        st.metric("Total Revenue realized", f"${total_revenue_amount:,.2f}")
 
-    # Section for tracking Sales History Timelines ordered by date
-    if not sales_df.empty:
-        st.markdown("---")
-        st.subheader("Financial Performance Log & Off-take Summary by Date")
-
-        # Group and summarize dataset rows dynamically by date
-        summary_dates = (
-            sales_df.groupby(["sale_date", "category"])
-            .agg(Quantity=("tag_no", "count"), Total_Revenue=("sale_price", "sum"))
-            .reset_index()
-            .sort_values(by="sale_date", ascending=False)
-        )
-
-        summary_dates.columns = [
-            "Date of Off-take",
-            "Category",
-            "Quantity (Heads)",
-            "Total Amount Realized",
-        ]
-        st.dataframe(summary_dates, use_container_width=True, hide_index=True)
-
-    st.markdown("---")
     col_left, col_right = st.columns(2)
     with col_left:
         st.subheader("Herd Structural Composition Breakdowns")
-        # Only display active herd stock context inside distribution pie chart allocations
-        active_herd = (
-            df_herd[~df_herd["category"].isin(["Sold", "Slaughtered"])]
-            if not df_herd.empty
-            else pd.DataFrame()
-        )
-        if not active_herd.empty:
-            cat_counts = active_herd["category"].value_counts().reset_index()
+        if not df_herd.empty:
+            cat_counts = df_herd["category"].value_counts().reset_index()
             cat_counts.columns = ["Category", "Head Count"]
             fig = px.pie(
                 cat_counts,
@@ -114,9 +66,7 @@ if menu == "Strategic Dashboard":
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info(
-                "No active livestock data currently inside database to render charts."
-            )
+            st.info("No livestock data currently inside database to render charts.")
 
     with col_right:
         st.subheader("Physical Feed Resource Balances (kg)")
@@ -181,12 +131,7 @@ elif menu == "Herd Registry & Intake":
                     )
 
     st.subheader("Active Livestock Registry Data Sheet Ledger")
-    # Show entries that aren't off-loaded yet
-    df_active = database.get_table_data("herd")
-    st.dataframe(
-        df_active[~df_active["category"].isin(["Sold", "Slaughtered"])],
-        use_container_width=True,
-    )
+    st.dataframe(database.get_table_data("herd"), use_container_width=True)
 
 # MODULE 3: Automated Birth Event Processing
 elif menu == "Birth Event Registration":
@@ -282,62 +227,7 @@ elif menu == "Fattening Performance Log":
         else:
             st.info("Weight timeline logs are currently completely empty.")
 
-# MODULE 5: NEW! Sales and Slaughter Off-take processing workflow
-elif menu == "Sales & Off-take Portal":
-    st.title("💰 Fattening Group Sales & Off-take Processing Desk")
-    st.markdown(
-        "Use this panel to officially transfer livestock profiles out of the active 'Fattening' tier group and declare them as sold commercial assets or processed items."
-    )
-
-    df_herd = database.get_table_data("herd")
-    # Pull items currently tagged as Fattening
-    fattening_pool = (
-        df_herd[df_herd["category"] == "Fattening"]["tag_no"].tolist()
-        if not df_herd.empty
-        else []
-    )
-
-    if not fattening_pool:
-        st.info(
-            "There are currently zero animals assigned to the 'Fattening' category group available for off-take sales."
-        )
-    else:
-        with st.form("sales_transaction_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                target_tag = st.selectbox(
-                    "Select Animal Tag to process:", fattening_pool
-                )
-                target_action = st.selectbox(
-                    "Target Action Status Group assignment:", ["Sold", "Slaughtered"]
-                )
-            with col2:
-                sale_price = st.number_input(
-                    "Realized Value / Transaction Selling Price ($):",
-                    min_value=0.0,
-                    step=50.0,
-                    value=150.0,
-                )
-                transaction_date = st.date_input(
-                    "Off-take Event Processing Date:", value=datetime.today()
-                )
-
-            submit_sale = st.form_submit_button(
-                "Finalize and Execute Off-take Transaction"
-            )
-            if submit_sale:
-                res = database.sell_or_slaughter_animal(
-                    target_tag, target_action, sale_price, transaction_date.isoformat()
-                )
-                if res:
-                    st.success(
-                        f"Transaction Recorded! Animal '{target_tag}' successfully group-shifted to '{target_action}' for ${sale_price:,.2f}."
-                    )
-                    st.rerun()
-                else:
-                    st.error("Database update transaction halted unexpectedly.")
-
-# MODULE 6: Warehouse Resource Inventory Balances
+# MODULE 5: Warehouse Resource Inventory Balances
 elif menu == "Feed Inventory Controller":
     st.title("Warehouse Feed Ingredient Stock Ledger Controller")
 
@@ -366,7 +256,7 @@ elif menu == "Feed Inventory Controller":
     st.subheader("Active Feed Stock Valuation and Safety Buffer Parameters")
     st.dataframe(database.get_table_data("inventory"), use_container_width=True)
 
-# MODULE 7: Interactive Data Corrections Spreadsheet Tool
+# MODULE 6: Interactive Data Corrections Spreadsheet Tool
 elif menu == "Data Entry Corrections":
     st.title("🛠️ System Data Editor & Corrections Panel")
     st.warning(
@@ -396,6 +286,7 @@ elif menu == "Data Entry Corrections":
             "Double-click any cell below to change a value, then click the save button below the table."
         )
 
+        # Display editable grid spreadsheet element
         edited_df = st.data_editor(
             df_current,
             use_container_width=True,
@@ -406,6 +297,7 @@ elif menu == "Data Entry Corrections":
         if st.button(f"Save Amendments to {target_table} Table"):
             conn = database.get_connection()
             try:
+                # Safely overwrite the modifications back to SQL file rows
                 edited_df.to_sql(target_table, conn, if_exists="replace", index=False)
                 st.success(
                     f"Database Updated Successfully! Cleaned table saved to '{target_table}'."

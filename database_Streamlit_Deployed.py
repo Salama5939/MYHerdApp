@@ -17,16 +17,14 @@ def initialize_db():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # 1. Main Herd Registry Table (Updated with sales price and sales date columns)
+    # 1. Main Herd Registry Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS herd (
             tag_no TEXT PRIMARY KEY,
-            category TEXT CHECK(category IN ('Ewes', 'Fattening', 'Permanent Sire', 'Pregnant', 'Small Sheep - Female', 'Small Sheep - Male', 'Sold', 'Slaughtered')),
+            category TEXT CHECK(category IN ('Ewes', 'Fattening', 'Permanent Sire', 'Pregnant', 'Small Sheep - Female', 'Small Sheep - Male')),
             status TEXT,
             birth_date DATE,
-            registration_date DATE,
-            sale_price REAL DEFAULT 0.0,
-            sale_date DATE
+            registration_date DATE
         )
     """)
 
@@ -98,15 +96,19 @@ def register_birth_event(ewe_tag, count, lamb_category):
     cursor = conn.cursor()
     today_str = date.today().isoformat()
     try:
+        # A. Transition mother from Pregnant back to breeding Ewe group
         cursor.execute(
             "UPDATE herd SET category = 'Ewes', status = 'Active' WHERE tag_no = ?",
             (ewe_tag,),
         )
+
+        # B. Log delivery event details in historical records
         cursor.execute(
             "INSERT INTO birth_records (ewe_tag_no, birth_date, lambs_count) VALUES (?, ?, ?)",
             (ewe_tag, today_str, count),
         )
 
+        # C. Auto-generate sequential records for newborn offspring profiles
         for i in range(count):
             lamb_tag = f"NEW-{ewe_tag}-{i+1}-{today_str[-2:]}"
             cursor.execute(
@@ -149,24 +151,3 @@ def adjust_inventory_stock(item_name, amount_kg):
     )
     conn.commit()
     conn.close()
-
-
-def sell_or_slaughter_animal(tag_no, target_status, price, custom_date):
-    """Updates an animal's operational category group to Sold or Slaughtered, setting health status, date, and price logs."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            """
-            UPDATE herd 
-            SET category = ?, status = ?, sale_price = ?, sale_date = ? 
-            WHERE tag_no = ?
-        """,
-            (target_status, target_status, price, custom_date, tag_no),
-        )
-        conn.commit()
-        return True
-    except Exception as e:
-        return False
-    finally:
-        conn.close()
