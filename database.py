@@ -255,10 +255,10 @@ def adjust_inventory_stock_advanced(item_name, amount_kg, cost_per_kg=0.0):
         INSERT INTO inventory (item_name, quantity_kg, reorder_level_kg, cost_per_kg) 
         VALUES (?, ?, 100.0, ?)
         ON CONFLICT(item_name) DO UPDATE SET 
-            quantity_kg = quantity_kg + ?,
-            cost_per_kg = CASE WHEN ? > 0 THEN ? ELSE cost_per_kg END
-    """,
-        (item_name, amount_kg, cost_per_kg, amount_kg, cost_per_kg, cost_per_kg),
+            quantity_kg = quantity_kg + EXCLUDED.quantity_kg,
+            cost_per_kg = CASE WHEN EXCLUDED.cost_per_kg > 0 THEN EXCLUDED.cost_per_kg ELSE inventory.cost_per_kg END
+        """,
+        (item_name, amount_kg, cost_per_kg),
     )
     conn.commit()
     conn.close()
