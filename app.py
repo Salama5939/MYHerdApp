@@ -4,406 +4,323 @@ import plotly.express as px
 import database
 from datetime import datetime, date
 
-st.set_page_config(page_title="Professional Herd Controller", layout="wide")
+# Page Layout Setup
+st.set_page_config(page_title="myHerdApp Engine", layout="wide", page_icon="🐑")
+
+# Initialize SQLite structures matching active configurations
 database.initialize_db()
 
-st.sidebar.title("Navigation Panel")
+# Navigation Sidebar Setup
+st.sidebar.title("🐑 myHerdApp Control Room")
+st.sidebar.markdown("---")
 menu = st.sidebar.radio(
-    "Go to module:",
+    "Go To Module Dashboard:",
     [
-        "Strategic Dashboard",
-        "Herd Registry & Intake",
-        "Lifecycle Growth Transitions",
-        "Birth Event Registration",
-        "Fattening Performance Log",
-        "Sales & Off-take Portal",
+        "Strategic Performance Metrics",
+        "Active Herd Registry",
+        "Birth Event Records",
+        "Growth Performance Logs",
         "Feed Inventory Controller",
         "Data Entry Corrections",
     ],
 )
 
-# 📊 MODULE 1: STRATEGIC DASHBOARD
-if menu == "Strategic Dashboard":
-    st.title("Strategic Herd & Financial Analysis Dashboard")
+# Fetch Shared Base Application Metrics
+df_herd = database.get_table_data("herd")
+df_births = database.get_table_data("birth_records")
+df_weights = database.get_table_data("weight_logs")
 
-    df_herd = database.get_table_data("herd")
-    df_inv = database.get_table_data("inventory")
-    df_w = database.get_table_data("weight_logs")
-
-    # Financial aggregation calculations
-    active_herd = (
-        df_herd[~df_herd["category"].isin(["Sold", "Slaughtered"])]
-        if not df_herd.empty
-        else pd.DataFrame()
-    )
-    sales_df = (
-        df_herd[df_herd["category"].isin(["Sold", "Slaughtered"])]
-        if not df_herd.empty
-        else pd.DataFrame()
-    )
-
-    total_purchase_outlay = (
-        df_herd["purchase_price"].sum() if not df_herd.empty else 0.0
-    )
-    total_feed_cost_accum = (
-        df_w["calculated_feed_cost"].sum() if not df_w.empty else 0.0
-    )
-    total_revenue = sales_df["sale_price"].sum() if not sales_df.empty else 0.0
-    net_profit_margin = total_revenue - (total_purchase_outlay + total_feed_cost_accum)
-
-    # Top Metric Grid Indicators
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.metric("Active Herd (Heads)", len(active_herd))
-    with c2:
-        st.metric(
-            "Total Capital Outlay",
-            f"${total_purchase_outlay:,.2f}",
-            help="Sum of all animal purchase costs",
-        )
-    with c3:
-        st.metric("Total Accumulated Feed Cost", f"${total_feed_cost_accum:,.2f}")
-    with c4:
-        st.metric(
-            "Net Operational Profit",
-            f"${net_profit_margin:,.2f}",
-            delta=f"${net_profit_margin:,.2f}",
-        )
-
+# 📊 MODULE 1: STRATEGIC PERFORMANCE METRICS
+if menu == "Strategic Performance Metrics":
+    st.title("Strategic Herd Performance & Summary Metrics")
     st.markdown("---")
 
-    # Fattening Growth Performance Tracking Data Layout Table
-    st.subheader(
-        "📈 Fattening Growth & Feed Efficiency Ledger (Individual Tag Analysis)"
-    )
-    if not df_w.empty:
-        display_w = df_w.copy().sort_values(by="entry_date", ascending=False)
-        display_w.columns = [
-            "ID",
-            "Tag Number",
-            "Weight (kg)",
-            "Feed Used (kg)",
-            "Log Date",
-            "Days Elapsed",
-            "Weight Gained (kg)",
-            "DLWG (kg/Day)",
-            "Feed Cost Allocation ($)",
-        ]
-        st.dataframe(display_w, use_container_width=True, hide_index=True)
-    else:
+    if df_herd.empty:
         st.info(
-            "No monthly weight performance logs available to analyze growth efficiency profiles."
+            "The active herd data ledger account is currently empty. Begin registering animals to see live summaries."
+        )
+    else:
+        active_animals = df_herd[df_herd["status"] == "Active"]
+
+        # Upper KPI Metrics Row
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total Active Animals Registered", len(active_animals))
+        m2.metric(
+            "Ewes Population Group",
+            len(active_animals[active_animals["category"] == "Ewe"]),
+        )
+        m3.metric(
+            "Lambs Population Group",
+            len(active_animals[active_animals["category"] == "Lamb"]),
         )
 
-    st.markdown("---")
-    col_left, col_right = st.columns(2)
-    with col_left:
-        st.subheader("Herd Structural Composition")
-        if not active_herd.empty:
-            cat_counts = active_herd["category"].value_counts().reset_index()
-            cat_counts.columns = ["Category", "Head Count"]
-            fig = px.pie(
+        total_lambs_born = (
+            int(df_births["lambs_count"].sum()) if not df_births.empty else 0
+        )
+        m4.metric("Total Successful Lambings Logs", total_lambs_born)
+
+        # Categorical Charts Section
+        st.markdown("### 📈 Structural Population Breakdowns")
+        c1, c2 = st.columns(2)
+        with c1:
+            cat_counts = active_animals["category"].value_value_counts().reset_index()
+            fig_cat = px.bar(
                 cat_counts,
-                values="Head Count",
-                names="Category",
-                hole=0.4,
-                color_discrete_sequence=px.colors.qualitative.Pastel,
+                x="category",
+                y="count",
+                title="Herd Structure Classification Count",
+                labels={"count": "Head Count"},
             )
-            st.plotly_chart(fig, use_container_width=True)
-
-    with col_right:
-        st.subheader("Physical Feed Ingredient Stock Levels (kg)")
-        if not df_inv.empty:
-            fig_bar = px.bar(
-                df_inv,
-                x="item_name",
-                y="quantity_kg",
-                labels={"item_name": "Ingredient", "quantity_kg": "Stocks (kg)"},
-                color="quantity_kg",
+            st.plotly_chart(fig_cat, use_container_width=True)
+        with c2:
+            status_counts = df_herd["status"].value_counts().reset_index()
+            fig_stat = px.pie(
+                status_counts,
+                names="status",
+                values="count",
+                title="Historical Status Allocation Ratio",
             )
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_stat, use_container_width=True)
 
-# 🐏 MODULE 2: HERD INTAKE (With Custom Purchase Tracking)
-elif menu == "Herd Registry & Intake":
-    st.title("Livestock Registration Intake Portal")
+# 📝 MODULE 2: ACTIVE HERD REGISTRY
+elif menu == "Active Herd Registry":
+    st.title("Active Herd Register & Entry Registry")
+    st.markdown("---")
 
-    with st.form("animal_registration_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            tag_no = st.text_input("Ear Tag Number (Unique):")
-            category = st.selectbox(
-                "Management Category Group:",
-                [
-                    "Ewes",
-                    "Fattening",
-                    "Permanent Sire",
-                    "Pregnant",
-                    "Small Sheep - Female",
-                    "Small Sheep - Male",
-                ],
-            )
-            status = st.text_input("Health Status Note:", value="Active/Healthy")
-        with col2:
-            birth_date = st.date_input(
-                "Animal Birth Date / Estimate:", value=date(2025, 1, 1)
-            )
-            purchase_price = st.number_input(
-                "Purchasing Acquisition Price ($):",
-                min_value=0.0,
-                step=50.0,
-                value=0.0,
-                help="Leave 0.0 if born on farm",
-            )
-            purchase_date = st.date_input(
-                "Acquisition / Purchase Date:", value=date(2026, 2, 22)
-            )
+    tab1, tab2 = st.tabs(["Add Single New Entry", "Execute Status Off-Take Action"])
 
-        submit = st.form_submit_button("Commit Animal Record to Database")
-        if submit:
-            if tag_no.strip() == "":
-                st.error("Submission Denied: Ear tag identifier cannot be left blank.")
-            else:
-                success = database.add_animal(
-                    tag_no.strip(),
-                    category,
-                    status,
-                    birth_date.isoformat(),
-                    purchase_price,
-                    purchase_date.isoformat(),
-                )
-                if success:
-                    st.success(
-                        f"Success! Animal '{tag_no}' added with an purchase value of ${purchase_price:,.2f}."
-                    )
-                    st.rerun()
-                else:
-                    st.error(
-                        "Database Conflict: This ear tag identifier already exists."
-                    )
-
-    st.subheader("Active Stock Registry Ledger")
-    df_all = database.get_table_data("herd")
-    st.dataframe(df_all, use_container_width=True)
-
-# 🔄 MODULE 3: LIFECYCLE GROWTH TRANSITIONS
-elif menu == "Lifecycle Growth Transitions":
-    st.title("🔄 Life Cycle Growth & Category Transition Center")
-    st.markdown(
-        "As lambs grow up, use this portal to upgrade their operational groups according to age milestones. Their background feed cost model updates instantly."
-    )
-
-    df_herd = database.get_table_data("herd")
-    active_pool = (
-        df_herd[~df_herd["category"].isin(["Sold", "Slaughtered"])]
-        if not df_herd.empty
-        else pd.DataFrame()
-    )
-
-    if active_pool.empty:
-        st.info(
-            "No active animals inside database available for transition processing."
-        )
-    else:
-        with st.form("transition_form"):
+    with tab1:
+        with st.form("add_animal_form", clear_on_submit=True):
+            st.subheader("Register New Animal Parameters")
             col1, col2 = st.columns(2)
             with col1:
-                selected_animal = st.selectbox(
-                    "Select Animal Tag to Transition:", active_pool["tag_no"].tolist()
+                tag_no = st.text_input("RFID Ear Tag Code (Unique ID):").strip()
+                category = st.selectbox(
+                    "Herd Category Classification:", ["Ewe", "Lamb", "Ram", "Yearling"]
                 )
-                current_cat = active_pool[active_pool["tag_no"] == selected_animal][
-                    "category"
-                ].values[0]
-                st.info(f"Current Assigned Category: **{current_cat}**")
-            with col2:
-                target_cat = st.selectbox(
-                    "Target New Lifecycle Category Group:",
-                    [
-                        "Ewes",
-                        "Fattening",
-                        "Permanent Sire",
-                        "Pregnant",
-                        "Small Sheep - Female",
-                        "Small Sheep - Male",
-                    ],
-                )
-
-            execute_transition = st.form_submit_button(
-                "Execute Lifecycle Category Shift"
-            )
-            if execute_transition:
-                database.update_animal_category(selected_animal, target_cat)
-                st.success(
-                    f"Success! Animal '{selected_animal}' upgraded from '{current_cat}' to '{target_cat}'."
-                )
-                st.rerun()
-
-# 🍼 MODULE 4: BIRTH EVENT REGISTRATION
-elif menu == "Birth Event Registration":
-    st.title("Automated Maternal Delivery Hub")
-    df_herd = database.get_table_data("herd")
-    pregnant_list = (
-        df_herd[df_herd["category"] == "Pregnant"]["tag_no"].tolist()
-        if not df_herd.empty
-        else []
-    )
-
-    if not pregnant_list:
-        st.warning(
-            "No livestock units currently flagged as 'Pregnant' to execute delivery entries."
-        )
-    else:
-        with st.form("birth_event_form"):
-            ewe_tag = st.selectbox("Select Delivering Mother ID Tag:", pregnant_list)
-            lamb_count = st.number_input(
-                "Offspring Head Count Yield:", min_value=1, max_value=4, value=1
-            )
-            lamb_gender = st.selectbox(
-                "Offspring Target Category Group (Nursing = $0 Cost):",
-                ["Small Sheep - Female", "Small Sheep - Male"],
-            )
-
-            submit_birth = st.form_submit_button("Record Birth Delivery")
-            if submit_birth:
-                if database.register_birth_event(ewe_tag, lamb_count, lamb_gender):
-                    st.success(
-                        f"Maternal record '{ewe_tag}' updated and {lamb_count} newborn lambs initialized."
-                    )
-                    st.rerun()
-
-# ⚖️ MODULE 5: FATTENING LOG (With Advanced Calculations)
-elif menu == "Fattening Performance Log":
-    st.title("Market Growth Group Weight Ledger")
-
-    df_herd = database.get_table_data("herd")
-    fattening_list = (
-        df_herd[df_herd["category"] == "Fattening"]["tag_no"].tolist()
-        if not df_herd.empty
-        else []
-    )
-
-    df_recipes = database.get_table_data("feed_recipes")
-    fatt_recipe_setup = (
-        "Fattening" in df_recipes["recipe_type"].tolist()
-        if not df_recipes.empty
-        else False
-    )
-
-    if not fatt_recipe_setup:
-        st.error(
-            "Configuration Required: Please formulate your Fattening Recipe Cost parameters inside the 'Feed Inventory Controller' tab first before entering weight logs."
-        )
-    elif not fattening_list:
-        st.info(
-            "No active livestock units currently categorized inside the 'Fattening' group."
-        )
-    else:
-        with st.form("weight_log_form"):
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                selected_tag = st.selectbox("Select Lot Animal Tag:", fattening_list)
-                weigh_date = st.date_input("Weighing Date:", value=date(2026, 3, 22))
-            with c2:
-                current_w = st.number_input(
-                    "Observed Scale Weight (kg):", min_value=1.0, step=0.5, value=45.0
-                )
-            with c3:
-                feed_used = st.number_input(
-                    "Total Feed Consumed Since Last Check (kg):",
-                    min_value=0.0,
-                    step=1.0,
-                    value=30.0,
-                )
-
-            submit_log = st.form_submit_button(
-                "Calculate and Record Performance Metrics"
-            )
-            if submit_log:
-                database.log_growth_metrics_advanced(
-                    selected_tag, current_w, feed_used, weigh_date.isoformat()
-                )
-                st.success(
-                    f"Advanced growth metrics compiled and saved for tag '{selected_tag}'."
-                )
-                st.rerun()
-
-# 💰 MODULE 6: SALES PORTAL
-elif menu == "Sales & Off-take Portal":
-    st.title("💰 Fattening Group Sales Processing Desk")
-    df_herd = database.get_table_data("herd")
-    fattening_pool = (
-        df_herd[df_herd["category"] == "Fattening"]["tag_no"].tolist()
-        if not df_herd.empty
-        else []
-    )
-
-    if not fattening_pool:
-        st.info(
-            "There are currently zero animals assigned to the 'Fattening' group available for off-take sales."
-        )
-    else:
-        with st.form("sales_transaction_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                target_tag = st.selectbox(
-                    "Select Animal Tag to process:", fattening_pool
-                )
-                target_action = st.selectbox(
-                    "Action Status Group:", ["Sold", "Slaughtered"]
+                status = st.selectbox(
+                    "Current Operational Status Level:",
+                    ["Active", "Sold", "Slaughtered", "Died"],
                 )
             with col2:
-                sale_price = st.number_input(
-                    "Realized Transaction Selling Price ($):",
+                birth_date = st.date_input(
+                    "Approximate Birth Date (Calendar):", value=date.today()
+                )
+                reg_date = st.date_input(
+                    "Ledger Entry Registry Date:", value=date.today()
+                )
+                price = st.number_input(
+                    "Purchase Price Value Amount ($):",
                     min_value=0.0,
                     step=50.0,
-                    value=150.0,
-                )
-                transaction_date = st.date_input(
-                    "Off-take Processing Date:", value=datetime.today()
+                    value=0.0,
                 )
 
-            submit_sale = st.form_submit_button("Finalize Sale Transaction")
-            if submit_sale:
-                if database.sell_or_slaughter_animal(
-                    target_tag, target_action, sale_price, transaction_date.isoformat()
-                ):
-                    st.success(
-                        f"Animal '{target_tag}' successfully group-shifted to '{target_action}' for ${sale_price:,.2f}."
+            comments = st.text_area("Structural Descriptive Comments / Observations:")
+            submit_btn = st.form_submit_button("Commit New Record to Ledger")
+
+            if submit_btn:
+                if not tag_no:
+                    st.error("Validation Error: RFID Ear Tag Code cannot be empty.")
+                elif not df_herd.empty and tag_no in df_herd["tag_no"].values:
+                    st.error(
+                        f"Duplicate Row Exception: Tag '{tag_no}' already exists in the local database records."
                     )
+                else:
+                    database.add_animal(
+                        tag_no,
+                        category,
+                        status,
+                        str(birth_date),
+                        str(reg_date),
+                        price,
+                        comments,
+                    )
+                    st.success(f"Animal {tag_no} has been registered successfully.")
                     st.rerun()
 
-# 🌾 MODULE 7: FEED INVENTORY & RECIPE CALCULATOR
+    with tab2:
+        st.subheader("Process Off-Take / Change Operational Status")
+        if df_herd.empty:
+            st.warning("No records found in database to modify.")
+        else:
+            active_list = df_herd[df_herd["status"] == "Active"]["tag_no"].tolist()
+            if not active_list:
+                st.info(
+                    "No active animals are currently present in your herd ledger registry."
+                )
+            else:
+                with st.form("status_offtake_form"):
+                    target_tag = st.selectbox(
+                        "Select Target Ear Tag Code:", active_list
+                    )
+                    target_action = st.selectbox(
+                        "Select Exit Action Description:",
+                        ["Sold", "Slaughtered", "Died"],
+                    )
+                    sale_price = st.number_input(
+                        "Observed Sale Price Value ($) - If applicable:",
+                        min_value=0.0,
+                        step=100.0,
+                        value=0.0,
+                    )
+                    transaction_date = st.date_input(
+                        "Off-Take Execution Date:", value=date.today()
+                    )
+
+                    submit_action = st.form_submit_button(
+                        "Execute Change Status Command"
+                    )
+                    if submit_action:
+                        database.sell_or_slaughter_animal(
+                            target_tag,
+                            target_action,
+                            sale_price,
+                            transaction_date.isoformat(),
+                        )
+                        st.success(
+                            f"Animal {target_tag} has been updated to '{target_action}' status successfully."
+                        )
+                        st.rerun()
+
+    st.subheader("Active Operations Tracking Matrix Grid")
+    st.dataframe(df_herd, use_container_width=True, hide_index=True)
+
+# 🍼 MODULE 3: BIRTH EVENT RECORDS
+elif menu == "Birth Event Records":
+    st.title("Ewe Lambing & Prolificacy Records Entry Desk")
+    st.markdown("---")
+
+    with st.form("birth_event_form", clear_on_submit=True):
+        st.subheader("Log Successful Lambing Event Occurrence")
+        col1, col2 = st.columns(2)
+        with col1:
+            ewe_tag = st.text_input("Dam Ewe Ear Tag Code (Mother ID):").strip()
+            lambs_count = st.number_input(
+                "Count of Born Lambs (Headcount):",
+                min_value=1,
+                max_value=4,
+                value=1,
+                step=1,
+            )
+        with col2:
+            birth_date = st.date_input("Event Date (Calendar):", value=date.today())
+            foster_ewe = st.text_input("Foster Ewe Tag Code (Optional):").strip()
+
+        comments = st.text_area("Birth Weight/Vigor Contextual Observations:")
+        submit_birth = st.form_submit_button("Register Event Parameters")
+
+        if submit_birth:
+            if not ewe_tag:
+                st.error(
+                    "Validation Error: Mother Dam Ewe Ear Tag Code cannot be left empty."
+                )
+            else:
+                foster_val = foster_ewe if foster_ewe else None
+                database.register_birth_event(
+                    ewe_tag, str(birth_date), int(lambs_count), foster_val, comments
+                )
+                st.success("Lambing event logs processed successfully.")
+                st.rerun()
+
+    st.subheader("Historical Birth Event Logs")
+    st.dataframe(df_births, use_container_width=True, hide_index=True)
+
+# ⚖️ MODULE 4: GROWTH PERFORMANCE LOGS
+elif menu == "Growth Performance Logs":
+    st.title("Growth Metrics & Individual Weigh-In Logging Station")
+    st.markdown("---")
+
+    with st.form("growth_metrics_form", clear_on_submit=True):
+        st.subheader("Log Growth Performance Milestone Metrics")
+        col1, col2 = st.columns(2)
+        with col1:
+            tag_no = st.text_input("Animal Target Ear Tag Code (ID):").strip()
+            weight = st.number_input(
+                "Observed Body Weight (Scale Value in kg):",
+                min_value=0.5,
+                step=2.0,
+                value=25.0,
+            )
+        with col2:
+            weigh_date = st.date_input("Scale Weighing Date:", value=date.today())
+            feed_kg = st.number_input(
+                "Allocated Concentrates Mix Consumed Since Last Weighing (kg):",
+                min_value=0.0,
+                step=1.0,
+                value=0.0,
+            )
+
+        comments = st.text_area("Growth Quality / Health Observations:")
+        submit_growth = st.form_submit_button("Commit Growth Performance Entry")
+
+        if submit_growth:
+            if not tag_no:
+                st.error(
+                    "Validation Error: Animal Target Ear Tag Code cannot be empty."
+                )
+            else:
+                database.log_growth_metrics_advanced(
+                    tag_no, weight, feed_kg, str(weigh_date), comments
+                )
+                st.success("Growth performance milestone logs adjusted successfully.")
+                st.rerun()
+
+    st.subheader("Historical Weight Logs Matrix Grid")
+    st.dataframe(df_weights, use_container_width=True, hide_index=True)
+
+# 🌾 MODULE 5: FEED INVENTORY & RECIPE CALCULATOR
 elif menu == "Feed Inventory Controller":
     st.title("Warehouse Inventory & Blended Feed Recipe Calculators")
-
     st.markdown("---")
     st.subheader("🧪 Interactive Feed Recipe Cost Formulation Desks")
 
     df_inv = database.get_table_data("inventory")
+    df_recipes = database.get_table_data("feed_recipes")
 
     if df_inv.empty:
         st.warning(
             "⚠️ Inventory is empty. Please add raw feed commodities via the Data Entry Corrections panel first."
         )
     else:
-        # Create a clean lookup dictionary mapping: item_name -> cost_per_kg
+        # Create ingredient price map
         price_lookup = {
             row["item_name"]: float(row["cost_per_kg"]) for _, row in df_inv.iterrows()
         }
-
-        # Generate inline inventory cost summary string dynamically
         cost_summary = " | ".join(
             [f"{name}: **${cost}/kg**" for name, cost in price_lookup.items()]
         )
         st.markdown(f"**Current Ingredient Costs:** {cost_summary}")
 
+        # Helper function to decode dynamic values stored in the breakdown column
+        def get_saved_ratio_dynamic(recipe_type, item_name):
+            if not df_recipes.empty:
+                match = df_recipes[df_recipes["recipe_type"] == recipe_type]
+                if not match.empty and "recipe_breakdown" in match.columns:
+                    breakdown = str(match["recipe_breakdown"].values[0])
+                    if breakdown:
+                        parts = breakdown.split(";")
+                        for part in parts:
+                            if ":" in part:
+                                name, val = part.split(":")
+                                if name.strip() == item_name.strip():
+                                    return int(val)
+            return 0
+
         tab1, tab2 = st.tabs(["Fattening Formulation", "General Herd Formulation"])
 
+        # Tab A: Fattening Formulation Desk
         with tab1:
             with st.form("fattening_recipe_form"):
                 f_ratios = {}
                 for row in df_inv.itertuples():
+                    saved_val = get_saved_ratio_dynamic("Fattening", row.item_name)
                     f_ratios[row.item_name] = st.slider(
-                        f"{row.item_name} Ratio (%)", 0, 100, 0
+                        f"{row.item_name} Ratio (%)",
+                        0,
+                        100,
+                        int(saved_val),
+                        key=f"flat_{row.item_name}",
                     )
 
                 total_f_pct = sum(f_ratios.values())
@@ -411,13 +328,12 @@ elif menu == "Feed Inventory Controller":
                     f"Total Combined Formulation Matrix Weight: **{total_f_pct}%**"
                 )
 
-                # Type-safe dynamic math calculation using our new price lookup dictionary
                 f_blended_cost = sum(
                     ((pct / 100) * price_lookup.get(name, 0.0))
                     for name, pct in f_ratios.items()
                 )
                 st.info(
-                    f"📊 Calculated Fattening Mix Cost: **${f_blended_cost:.2f} per 1 kg**"
+                    f"📊 Calculated Fattening Mix Cost: **${f_blended_cost:.4f} per 1 kg**"
                 )
 
                 save_f_recipe = st.form_submit_button(
@@ -429,22 +345,29 @@ elif menu == "Feed Inventory Controller":
                             "Formulation Aborted: Ratios must sum up to exactly 100%."
                         )
                     else:
-                        corn_val = f_ratios.get("Corn", 0)
-                        soy_val = f_ratios.get("Soybean Meal", 0)
-                        hay_val = f_ratios.get("Alfalfa Hay", 0)
-                        database.save_feed_recipe(
-                            "Fattening", corn_val, soy_val, hay_val, f_blended_cost
+                        breakdown_str = ";".join(
+                            [f"{k}:{v}" for k, v in f_ratios.items()]
+                        )
+                        database.save_feed_recipe_advanced(
+                            "Fattening", breakdown_str, f_blended_cost
                         )
                         st.success(
                             "Fattening formulation parameters committed successfully."
                         )
+                        st.rerun()
 
+        # Tab B: General Herd Formulation Desk
         with tab2:
             with st.form("general_recipe_form"):
                 g_ratios = {}
                 for row in df_inv.itertuples():
+                    saved_val = get_saved_ratio_dynamic("General Herd", row.item_name)
                     g_ratios[row.item_name] = st.slider(
-                        f"{row.item_name} Ratio (%)", 0, 100, 0
+                        f"{row.item_name} Ratio (%)",
+                        0,
+                        100,
+                        int(saved_val),
+                        key=f"gen_{row.item_name}",
                     )
 
                 total_g_pct = sum(g_ratios.values())
@@ -452,13 +375,12 @@ elif menu == "Feed Inventory Controller":
                     f"Total Combined Formulation Matrix Weight: **{total_g_pct}%**"
                 )
 
-                # Type-safe dynamic math calculation using our new price lookup dictionary
                 g_blended_cost = sum(
                     ((pct / 100) * price_lookup.get(name, 0.0))
                     for name, pct in g_ratios.items()
                 )
                 st.info(
-                    f"📊 Calculated General Herd Mix Cost: **${g_blended_cost:.2f} per 1 kg**"
+                    f"📊 Calculated General Herd Mix Cost: **${g_blended_cost:.4f} per 1 kg**"
                 )
 
                 save_g_recipe = st.form_submit_button(
@@ -470,29 +392,28 @@ elif menu == "Feed Inventory Controller":
                             "Formulation Aborted: Ratios must sum up to exactly 100%."
                         )
                     else:
-                        corn_val = g_ratios.get("Corn", 0)
-                        soy_val = g_ratios.get("Soybean Meal", 0)
-                        hay_val = g_ratios.get("Alfalfa Hay", 0)
-                        database.save_feed_recipe(
-                            "General Herd", corn_val, soy_val, hay_val, g_blended_cost
+                        breakdown_str = ";".join(
+                            [f"{k}:{v}" for k, v in g_ratios.items()]
+                        )
+                        database.save_feed_recipe_advanced(
+                            "General Herd", breakdown_str, g_blended_cost
                         )
                         st.success(
                             "General Herd formulation parameters committed successfully."
                         )
+                        st.rerun()
 
-    # 📦 Sub-Panel B: Raw Stock Movements
+    # Sub-Panel B: Raw Stock Movements
     st.markdown("---")
     st.subheader("📦 Warehouse Inventory Stock Adjustments")
     with st.form("inventory_adjustment_form"):
         col1, col2 = st.columns(2)
         with col1:
-            item_options = (
-                df_inv["item_name"].tolist()
-                if not df_inv.empty
-                else ["Corn", "Soybean Meal", "Alfalfa Hay"]
-            )
-            chosen_item = st.selectbox(
-                "Select Feed Ingredient Description:", item_options
+            item_options = df_inv["item_name"].tolist() if not df_inv.empty else []
+            chosen_item = (
+                st.selectbox("Select Feed Ingredient Description:", item_options)
+                if item_options
+                else st.selectbox("Select Feed Ingredient Description:", ["Corn"])
             )
             add_qty = st.number_input(
                 "Stock Volume Shift Value (+ Purchases, - Mix Drawdowns):",
@@ -500,16 +421,16 @@ elif menu == "Feed Inventory Controller":
                 step=50.0,
             )
         with col2:
-            cost_per_kg = st.number_input(
+            cost_input = st.number_input(
                 "Observed Unit Buying Cost per 1 kg ($):",
                 min_value=0.0,
-                step=1.0,
+                step=0.5,
                 value=15.0,
             )
 
         submit_inv = st.form_submit_button("Update Stock Balance Ledger Account")
-        if submit_inv:
-            database.adjust_inventory_stock_advanced(chosen_item, add_qty, cost_per_kg)
+        if submit_inv and item_options:
+            database.adjust_inventory_stock_advanced(chosen_item, add_qty, cost_input)
             st.success(f"Warehouse Balance Updated for '{chosen_item}'.")
             st.rerun()
 
@@ -518,44 +439,49 @@ elif menu == "Feed Inventory Controller":
         database.get_table_data("inventory"), use_container_width=True, hide_index=True
     )
 
-# 🛠️ MODULE 8: INTERACTIVE CELL CORRECTIONS
+# 🛠️ MODULE 6: DATA ENTRY CORRECTIONS PANEL
 elif menu == "Data Entry Corrections":
-    st.title("🛠️ System Data Editor & Corrections Panel")
+    st.title("Data Entry Corrections & Direct SQL Ledger Overrides")
+    st.markdown("---")
 
-    table_choice = st.selectbox(
-        "Select Table to Edit:",
-        [
-            "Herd Registry (herd)",
-            "Weight Logs (weight_logs)",
-            "Feed Inventory (inventory)",
-            "Feed Recipes (feed_recipes)",
-        ],
+    st.subheader("🔍 Local SQLite Live Matrix Inspection Deck")
+    target_table = st.selectbox(
+        "Select Target Table Matrix to Load for Inspection:",
+        ["herd", "birth_records", "weight_logs", "inventory", "feed_recipes"],
     )
-    db_table_map = {
-        "Herd Registry (herd)": "herd",
-        "Weight Logs (weight_logs)": "weight_logs",
-        "Feed Inventory (inventory)": "inventory",
-        "Feed Recipes (feed_recipes)": "feed_recipes",
-    }
-    target_table = db_table_map[table_choice]
-    df_current = database.get_table_data(target_table)
+    df_inspect = database.get_table_data(target_table)
+    st.dataframe(df_inspect, use_container_width=True)
 
-    if not df_current.empty:
-        edited_df = st.data_editor(
-            df_current,
-            use_container_width=True,
-            num_rows="dynamic",
-            key=f"editor_{target_table}",
+    st.markdown("---")
+    st.subheader(
+        "⚡ Danger Zone: Execute Direct Raw Database Custom SQL Command Override"
+    )
+    st.warning(
+        "Executing raw manual commands bypasses systemic validations. Use extreme caution."
+    )
+
+    with st.form("custom_sql_form"):
+        raw_query = st.text_area("Input Valid SQLite Query Statement Here:")
+        query_type = st.radio(
+            "Statement Core Operation Action Profile Type:",
+            [
+                "SELECT Data Operations",
+                "INSERT / UPDATE / DELETE Structure Modifications",
+            ],
         )
-        if st.button("Save Amendments to Table Row Storage"):
-            conn = database.get_connection()
+        submit_query = st.form_submit_button("Force Run SQL Directive String")
+
+        if submit_query and raw_query.strip():
             try:
-                edited_df.to_sql(target_table, conn, if_exists="replace", index=False)
-                st.success(f"Database Table row storage updated successfully.")
-                database.initialize_db()
+                is_sel = True if "SELECT Data" in query_type else False
+                res = database.execute_custom_query(raw_query, is_select=is_sel)
+                if is_sel:
+                    st.success("Query processed successfully. Returned matrix rows:")
+                    st.dataframe(res, use_container_width=True)
+                else:
+                    st.success(
+                        "Database structural modification committed successfully to file storage accounts."
+                    )
+                    st.rerun()
             except Exception as e:
-                st.error(f"Failed to update database: {e}")
-            finally:
-                conn.close()
-    else:
-        st.info("Selected data row indices are completely empty.")
+                st.error(f"SQL Backend Exception Traceback Error: {e}")

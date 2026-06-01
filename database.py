@@ -61,12 +61,14 @@ def init_db():
         );
     """)
 
+    # Updated table layout to dynamically store comprehensive ingredient matrix profiles textually
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS feed_recipes (
             recipe_type TEXT PRIMARY KEY CHECK(recipe_type IN ('Fattening', 'General Herd')),
             corn_pct REAL NOT NULL DEFAULT 0.0,
             soybean_pct REAL NOT NULL DEFAULT 0.0,
             hay_pct REAL NOT NULL DEFAULT 0.0,
+            recipe_breakdown TEXT DEFAULT '',
             calculated_mix_cost_per_kg REAL NOT NULL DEFAULT 0.0
         );
     """)
@@ -120,7 +122,7 @@ def get_connection():
 
 
 # -------------------------------------------------------------------------
-# FLEXIBLE MODULE BINDINGS REQUIRED BY APP.PY (Fixed parameter structures)
+# FLEXIBLE MODULE BINDINGS REQUIRED BY APP.PY
 # -------------------------------------------------------------------------
 
 
@@ -169,14 +171,15 @@ def log_growth_metrics_advanced(tag_no, weight, feed_kg, weigh_date, comments=""
     )
 
 
-def sell_or_slaughter_animal(tag_no, structural_status, sale_price=None):
+def sell_or_slaughter_animal(tag_no, structural_status, sale_price=None, date_str=None):
     """Modifies an animal status to reflect an off-take exit event dynamically."""
     if sale_price is not None and str(sale_price).strip() != "":
+        log_comment = f"Sold for ${sale_price}"
+        if date_str:
+            log_comment += f" on {date_str}"
         query = "UPDATE herd SET status = ?, comments = ? WHERE tag_no = ?"
         execute_custom_query(
-            query,
-            (structural_status, f"Sold for ${sale_price}", tag_no),
-            is_select=False,
+            query, (structural_status, log_comment, tag_no), is_select=False
         )
     else:
         query = "UPDATE herd SET status = ? WHERE tag_no = ?"
@@ -184,7 +187,7 @@ def sell_or_slaughter_animal(tag_no, structural_status, sale_price=None):
 
 
 # -------------------------------------------------------------------------
-# CORE PARAMETER CALCULATOR LOGIC (Module 7 fixes)
+# CORE PARAMETER CALCULATOR LOGIC (Dynamic Serialized System Engine)
 # -------------------------------------------------------------------------
 
 
@@ -220,25 +223,50 @@ def adjust_inventory_stock_advanced(item_name, amount_kg, cost_per_kg):
     conn.close()
 
 
-def save_feed_recipe(recipe_type, corn_pct, soy_pct, hay_pct, calculated_cost):
-    """Locks formulation parameters securely into the database rows."""
+def save_feed_recipe_advanced(recipe_type, breakdown_string, calculated_cost):
+    """
+    Saves advanced dynamic configurations using text-serialized breakdowns.
+    Ensures that any inventory item is captured and can be parsed natively by app.py.
+    """
     conn = create_connection()
     cursor = conn.cursor()
+
+    # Extract baseline numbers safely for historical backward compatibility
+    corn_val = 0
+    soy_val = 0
+    hay_val = 0
+
+    try:
+        parts = breakdown_string.split(";")
+        for p in parts:
+            if ":" in p:
+                name, val = p.split(":")
+                if "Corn" in name:
+                    corn_val = int(val)
+                elif "Soybean" in name:
+                    soy_val = int(val)
+                elif "Hay" in name or "Barseem" in name:
+                    hay_val += int(val)
+    except Exception:
+        pass
+
     cursor.execute(
         """
-        INSERT INTO feed_recipes (recipe_type, corn_pct, soybean_pct, hay_pct, calculated_mix_cost_per_kg)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO feed_recipes (recipe_type, corn_pct, soybean_pct, hay_pct, recipe_breakdown, calculated_mix_cost_per_kg)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(recipe_type) DO UPDATE SET
             corn_pct = excluded.corn_pct,
             soybean_pct = excluded.soybean_pct,
             hay_pct = excluded.hay_pct,
+            recipe_breakdown = excluded.recipe_breakdown,
             calculated_mix_cost_per_kg = excluded.calculated_mix_cost_per_kg
     """,
         (
             recipe_type,
-            int(corn_pct),
-            int(soy_pct),
-            int(hay_pct),
+            corn_val,
+            soy_val,
+            hay_val,
+            breakdown_string,
             float(calculated_cost),
         ),
     )
