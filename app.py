@@ -7,24 +7,13 @@ from datetime import datetime, date
 st.set_page_config(page_title="Professional Herd Controller", layout="wide")
 database.initialize_db()
 
-# Ensure stock items exist so the recipe calculators can fetch unit costs cleanly
-init_ingredients = [
-    ("Corn", 0.0, 15.0),
-    ("Soybean Meal", 0.0, 28.0),
-    ("Alfalfa Hay", 0.0, 10.0),
-]
-for name, qty, cost in init_ingredients:
-    df_check = database.get_table_data("inventory")
-    if df_check.empty or name not in df_check["item_name"].tolist():
-        database.adjust_inventory_stock_advanced(name, qty, cost)
-
 st.sidebar.title("Navigation Panel")
 menu = st.sidebar.radio(
     "Go to module:",
     [
         "Strategic Dashboard",
         "Herd Registry & Intake",
-        "Lifecycle Growth Transitions",  # <-- New Module Here!
+        "Lifecycle Growth Transitions",
         "Birth Event Registration",
         "Fattening Performance Log",
         "Sales & Off-take Portal",
@@ -144,7 +133,14 @@ elif menu == "Herd Registry & Intake":
             tag_no = st.text_input("Ear Tag Number (Unique):")
             category = st.selectbox(
                 "Management Category Group:",
-                ["Ewes", "Fattening", "Permanent Sire", "Pregnant"],
+                [
+                    "Ewes",
+                    "Fattening",
+                    "Permanent Sire",
+                    "Pregnant",
+                    "Small Sheep - Female",
+                    "Small Sheep - Male",
+                ],
             )
             status = st.text_input("Health Status Note:", value="Active/Healthy")
         with col2:
@@ -189,7 +185,7 @@ elif menu == "Herd Registry & Intake":
     df_all = database.get_table_data("herd")
     st.dataframe(df_all, use_container_width=True)
 
-# 🔄 MODULE 3: NEW! LIFECYCLE GROWTH TRANSITIONS
+# 🔄 MODULE 3: LIFECYCLE GROWTH TRANSITIONS
 elif menu == "Lifecycle Growth Transitions":
     st.title("🔄 Life Cycle Growth & Category Transition Center")
     st.markdown(
@@ -214,7 +210,6 @@ elif menu == "Lifecycle Growth Transitions":
                 selected_animal = st.selectbox(
                     "Select Animal Tag to Transition:", active_pool["tag_no"].tolist()
                 )
-                # Show current category for guidance
                 current_cat = active_pool[active_pool["tag_no"] == selected_animal][
                     "category"
                 ].values[0]
@@ -286,7 +281,6 @@ elif menu == "Fattening Performance Log":
         else []
     )
 
-    # Verify recipes are set up to enable math formulas
     df_recipes = database.get_table_data("feed_recipes")
     fatt_recipe_setup = (
         "Fattening" in df_recipes["recipe_type"].tolist()
@@ -381,87 +375,110 @@ elif menu == "Sales & Off-take Portal":
 elif menu == "Feed Inventory Controller":
     st.title("Warehouse Inventory & Blended Feed Recipe Calculators")
 
-    # 🧪 Sub-Panel A: Custom Recipe Cost Formulators
     st.markdown("---")
     st.subheader("🧪 Interactive Feed Recipe Cost Formulation Desks")
 
     df_inv = database.get_table_data("inventory")
 
-    # Map current commodity prices from stock ledger
-    prices = {row["item_name"]: row["cost_per_kg"] for _, row in df_inv.iterrows()}
-    corn_cost = prices.get("Corn", 15.0)
-    soy_cost = prices.get("Soybean Meal", 28.0)
-    hay_cost = prices.get("Alfalfa Hay", 10.0)
-
-    tab1, tab2 = st.tabs(["Fattening Formulation", "General Herd Formulation"])
-
-    with tab1:
-        st.markdown(
-            f"**Current Ingredient Costs:** Corn: **${corn_cost}/kg** | Soybean Meal: **${soy_cost}/kg** | Alfalfa Hay: **${hay_cost}/kg**"
+    if df_inv.empty:
+        st.warning(
+            "⚠️ Inventory is empty. Please add raw feed commodities via the Data Entry Corrections panel first."
         )
-        with st.form("fattening_recipe_form"):
-            f_corn = st.slider("Corn Ratio (%)", 0, 100, 60)
-            f_soy = st.slider("Soybean Meal Ratio (%)", 0, 100, 25)
-            f_hay = st.slider("Alfalfa Hay Ratio (%)", 0, 100, 15)
+    else:
+        # Create a clean lookup dictionary mapping: item_name -> cost_per_kg
+        price_lookup = {
+            row["item_name"]: float(row["cost_per_kg"]) for _, row in df_inv.iterrows()
+        }
 
-            total_f_pct = f_corn + f_soy + f_hay
-            st.write(f"Total Combined Formulation Matrix Weight: **{total_f_pct}%**")
+        # Generate inline inventory cost summary string dynamically
+        cost_summary = " | ".join(
+            [f"{name}: **${cost}/kg**" for name, cost in price_lookup.items()]
+        )
+        st.markdown(f"**Current Ingredient Costs:** {cost_summary}")
 
-            # Compute proportional financial weight breakdown
-            f_blended_cost = (
-                ((f_corn / 100) * corn_cost)
-                + ((f_soy / 100) * soy_cost)
-                + ((f_hay / 100) * hay_cost)
-            )
-            st.info(
-                f"📊 Calculated Fattening Mix Cost: **${f_blended_cost:.2f} per 1 kg**"
-            )
+        tab1, tab2 = st.tabs(["Fattening Formulation", "General Herd Formulation"])
 
-            save_f_recipe = st.form_submit_button(
-                "Lock & Save Fattening Ration Cost Parameters"
-            )
-            if save_f_recipe:
-                if total_f_pct != 100:
-                    st.error("Formulation Aborted: Ratios must sum up to exactly 100%.")
-                else:
-                    database.save_feed_recipe(
-                        "Fattening", f_corn, f_soy, f_hay, f_blended_cost
-                    )
-                    st.success(
-                        "Fattening formulation parameters committed successfully."
+        with tab1:
+            with st.form("fattening_recipe_form"):
+                f_ratios = {}
+                for row in df_inv.itertuples():
+                    f_ratios[row.item_name] = st.slider(
+                        f"{row.item_name} Ratio (%)", 0, 100, 0
                     )
 
-    with tab2:
-        with st.form("general_recipe_form"):
-            g_corn = st.slider("Corn Ratio (%)", 0, 100, 40)
-            g_soy = st.slider("Soybean Meal Ratio (%)", 0, 100, 20)
-            g_hay = st.slider("Alfalfa Hay Ratio (%)", 0, 100, 40)
+                total_f_pct = sum(f_ratios.values())
+                st.write(
+                    f"Total Combined Formulation Matrix Weight: **{total_f_pct}%**"
+                )
 
-            total_g_pct = g_corn + g_soy + g_hay
-            st.write(f"Total Combined Formulation Matrix Weight: **{total_g_pct}%**")
+                # Type-safe dynamic math calculation using our new price lookup dictionary
+                f_blended_cost = sum(
+                    ((pct / 100) * price_lookup.get(name, 0.0))
+                    for name, pct in f_ratios.items()
+                )
+                st.info(
+                    f"📊 Calculated Fattening Mix Cost: **${f_blended_cost:.2f} per 1 kg**"
+                )
 
-            g_blended_cost = (
-                ((g_corn / 100) * corn_cost)
-                + ((g_soy / 100) * soy_cost)
-                + ((g_hay / 100) * hay_cost)
-            )
-            st.info(
-                f"📊 Calculated General Herd Mix Cost: **${g_blended_cost:.2f} per 1 kg**"
-            )
+                save_f_recipe = st.form_submit_button(
+                    "Lock & Save Fattening Ration Cost Parameters"
+                )
+                if save_f_recipe:
+                    if total_f_pct != 100:
+                        st.error(
+                            "Formulation Aborted: Ratios must sum up to exactly 100%."
+                        )
+                    else:
+                        corn_val = f_ratios.get("Corn", 0)
+                        soy_val = f_ratios.get("Soybean Meal", 0)
+                        hay_val = f_ratios.get("Alfalfa Hay", 0)
+                        database.save_feed_recipe(
+                            "Fattening", corn_val, soy_val, hay_val, f_blended_cost
+                        )
+                        st.success(
+                            "Fattening formulation parameters committed successfully."
+                        )
 
-            save_g_recipe = st.form_submit_button(
-                "Lock & Save General Herd Ration Cost Parameters"
-            )
-            if save_g_recipe:
-                if total_g_pct != 100:
-                    st.error("Formulation Aborted: Ratios must sum up to exactly 100%.")
-                else:
-                    database.save_feed_recipe(
-                        "General Herd", g_corn, g_soy, g_hay, g_blended_cost
+        with tab2:
+            with st.form("general_recipe_form"):
+                g_ratios = {}
+                for row in df_inv.itertuples():
+                    g_ratios[row.item_name] = st.slider(
+                        f"{row.item_name} Ratio (%)", 0, 100, 0
                     )
-                    st.success(
-                        "General Herd formulation parameters committed successfully."
-                    )
+
+                total_g_pct = sum(g_ratios.values())
+                st.write(
+                    f"Total Combined Formulation Matrix Weight: **{total_g_pct}%**"
+                )
+
+                # Type-safe dynamic math calculation using our new price lookup dictionary
+                g_blended_cost = sum(
+                    ((pct / 100) * price_lookup.get(name, 0.0))
+                    for name, pct in g_ratios.items()
+                )
+                st.info(
+                    f"📊 Calculated General Herd Mix Cost: **${g_blended_cost:.2f} per 1 kg**"
+                )
+
+                save_g_recipe = st.form_submit_button(
+                    "Lock & Save General Herd Ration Cost Parameters"
+                )
+                if save_g_recipe:
+                    if total_g_pct != 100:
+                        st.error(
+                            "Formulation Aborted: Ratios must sum up to exactly 100%."
+                        )
+                    else:
+                        corn_val = g_ratios.get("Corn", 0)
+                        soy_val = g_ratios.get("Soybean Meal", 0)
+                        hay_val = g_ratios.get("Alfalfa Hay", 0)
+                        database.save_feed_recipe(
+                            "General Herd", corn_val, soy_val, hay_val, g_blended_cost
+                        )
+                        st.success(
+                            "General Herd formulation parameters committed successfully."
+                        )
 
     # 📦 Sub-Panel B: Raw Stock Movements
     st.markdown("---")
@@ -469,9 +486,13 @@ elif menu == "Feed Inventory Controller":
     with st.form("inventory_adjustment_form"):
         col1, col2 = st.columns(2)
         with col1:
-            item_name = st.selectbox(
-                "Select Feed Ingredient Description:",
-                ["Corn", "Soybean Meal", "Alfalfa Hay"],
+            item_options = (
+                df_inv["item_name"].tolist()
+                if not df_inv.empty
+                else ["Corn", "Soybean Meal", "Alfalfa Hay"]
+            )
+            chosen_item = st.selectbox(
+                "Select Feed Ingredient Description:", item_options
             )
             add_qty = st.number_input(
                 "Stock Volume Shift Value (+ Purchases, - Mix Drawdowns):",
@@ -488,8 +509,8 @@ elif menu == "Feed Inventory Controller":
 
         submit_inv = st.form_submit_button("Update Stock Balance Ledger Account")
         if submit_inv:
-            database.adjust_inventory_stock_advanced(item_name, add_qty, cost_per_kg)
-            st.success(f"Warehouse Balance Updated for '{item_name}'.")
+            database.adjust_inventory_stock_advanced(chosen_item, add_qty, cost_per_kg)
+            st.success(f"Warehouse Balance Updated for '{chosen_item}'.")
             st.rerun()
 
     st.subheader("Active Feed Stock Valuation & Safety Parameters")
