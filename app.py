@@ -403,18 +403,32 @@ elif menu == "Feed Inventory Controller":
                         )
                         st.rerun()
 
-    # Sub-Panel B: Raw Stock Movements
+    # Sub-Panel B: Raw Stock Movements & New Ingredient Registration
     st.markdown("---")
-    st.subheader("📦 Warehouse Inventory Stock Adjustments")
+    st.subheader("📦 Warehouse Inventory Stock Adjustments & New Additions")
     with st.form("inventory_adjustment_form"):
         col1, col2 = st.columns(2)
         with col1:
             item_options = df_inv["item_name"].tolist() if not df_inv.empty else []
-            chosen_item = (
-                st.selectbox("Select Feed Ingredient Description:", item_options)
-                if item_options
-                else st.selectbox("Select Feed Ingredient Description:", ["Corn"])
+
+            # 🆕 Added selection type toggle so the system knows if you are updating or adding fresh
+            entry_mode = st.radio(
+                "Adjustment Action Type:",
+                ["Update Existing Stock", "Register Brand New Ingredient"],
+                horizontal=True,
             )
+
+            if entry_mode == "Register Brand New Ingredient":
+                chosen_item = st.text_input(
+                    "Type Brand New Ingredient Name (e.g., Radda, Wheat):"
+                ).strip()
+            else:
+                chosen_item = (
+                    st.selectbox("Select Existing Feed Ingredient:", item_options)
+                    if item_options
+                    else st.text_input("Type Feed Ingredient Name:").strip()
+                )
+
             add_qty = st.number_input(
                 "Stock Volume Shift Value (+ Purchases, - Mix Drawdowns):",
                 value=100.0,
@@ -428,11 +442,25 @@ elif menu == "Feed Inventory Controller":
                 value=15.0,
             )
 
-        submit_inv = st.form_submit_button("Update Stock Balance Ledger Account")
-        if submit_inv and item_options:
-            database.adjust_inventory_stock_advanced(chosen_item, add_qty, cost_input)
-            st.success(f"Warehouse Balance Updated for '{chosen_item}'.")
-            st.rerun()
+        submit_inv = st.form_submit_button("Commit Entry to Stock Ledger")
+        if submit_inv:
+            if not chosen_item:
+                st.error("Validation Error: Ingredient name cannot be left blank.")
+            elif (
+                entry_mode == "Register Brand New Ingredient"
+                and chosen_item in item_options
+            ):
+                st.error(
+                    f"The item '{chosen_item}' already exists. Please choose 'Update Existing Stock' instead."
+                )
+            else:
+                database.adjust_inventory_stock_advanced(
+                    chosen_item, add_qty, cost_input
+                )
+                st.success(
+                    f"Warehouse Ledger Account updated successfully for '{chosen_item}'!"
+                )
+                st.rerun()
 
     st.subheader("Active Feed Stock Valuation & Safety Parameters")
     st.dataframe(
