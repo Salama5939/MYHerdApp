@@ -270,17 +270,16 @@ elif menu == "Growth Performance Logs":
     st.dataframe(df_weights, use_container_width=True, hide_index=True)
 
 # 🌾 MODULE 5: FEED INVENTORY & RECIPE CALCULATOR
-
 elif menu == "Feed Inventory Controller":
-    st.title("Warehouse Inventory & Blended Feed Recipe Calculators")
-    st.markdown("---")
-    st.subheader("🧪 Interactive Feed Recipe Cost Formulation Desks")
+        st.title("Warehouse Inventory & Blended Feed Recipe Calculators")
+        st.markdown("---")
+        st.subheader("🧪 Interactive Feed Recipe Cost Formulation Desks")
 
-    df_inv = database.get_table_data("inventory")
-    df_recipes = database.get_table_data("feed_recipes")
+        df_inv = database.get_table_data("inventory")
+        df_recipes = database.get_table_data("feed_recipes")
 
-        # 🌟 SAFETY FILTER STRUCTURAL CHECK: Ensure our tracking column flag exists
-    if not df_inv.empty and "is_active" not in df_inv.columns:
+        # SAFETY FILTER STRUCTURAL CHECK: Ensure our tracking column flag exists
+        if not df_inv.empty and "is_active" not in df_inv.columns:
             import sqlite3
             conn = sqlite3.connect("herd_management.db")
             cursor = conn.cursor()
@@ -290,18 +289,17 @@ elif menu == "Feed Inventory Controller":
             except Exception:
                 pass
             conn.close()
-            # Reload to grab the newly initialized column structure
             df_inv = database.get_table_data("inventory")
 
-    if df_inv.empty:
+        if df_inv.empty:
             st.warning(
                 "⚠️ Inventory is empty. Please add raw feed commodities via the Data Entry Corrections panel first."
             )
-    else:
-            # 🌟 FILTER: Separate active elements from archived records
+        else:
+            # FILTER: Separate active elements from archived records
             df_active_sliders = df_inv[df_inv["is_active"] == 1] if "is_active" in df_inv.columns else df_inv
 
-            # Create ingredient price map (Updated to use df_active_sliders)
+            # Create ingredient price map
             price_lookup = {
                 row["item_name"]: float(row["cost_per_kg"]) for _, row in df_active_sliders.iterrows()
             }
@@ -316,45 +314,113 @@ elif menu == "Feed Inventory Controller":
                     match = df_recipes[df_recipes["recipe_type"] == recipe_type]
                     if not match.empty and "recipe_breakdown" in match.columns:
                         breakdown = str(match["recipe_breakdown"].values[0])
-                        if breakdown:
+                        if breakdown and ":" in breakdown:
                             parts = breakdown.split(";")
                             for part in parts:
                                 if ":" in part:
                                     name, val = part.split(":")
                                     if name.strip() == item_name.strip():
-                                        return int(val)
+                                        try:
+                                            return int(val)
+                                        except ValueError:
+                                            return 0
                 return 0
 
+            # --- DRAWING THE INTERACTIVE RECIPE SLIDER ENGAGEMENT DESK ---
             tab1, tab2 = st.tabs(["Fattening Formulation", "General Herd Formulation"])
             
-            # (Your existing slider drawing matrix loop continues here inside tab1 and tab2)
-            # Make sure your inner interactive loop now pulls from: df_active_sliders
+            # 🧪 TAB 1: FATTENING FORMULATION MATRIX
+            with tab1:
+                st.markdown("#### Adjust Fattening Ingredient Ratios (%)")
+                ratios_fattening = {}
+                for _, row in df_active_sliders.iterrows():
+                    ing_name = row["item_name"]
+                    default_val = get_saved_ratio_dynamic("Fattening", ing_name)
+                    ratios_fattening[ing_name] = st.slider(
+                        f"Ratio for {ing_name} (%)", 
+                        min_value=0, max_value=100, value=default_val, key=f"fattening_slide_{ing_name}"
+                    )
+                
+                total_fattening = sum(ratios_fattening.values())
+                st.metric("Total Formulation Sum:", f"{total_fattening} %")
+                
+                blend_cost_fattening = sum((ratios_fattening[name] / 100.0) * price_lookup[name] for name in ratios_fattening)
+                st.info(f"**Calculated Blended Fattening Feed Cost:** $ {blend_cost_fattening:.2f} per kg")
+                
+                if st.button("Save Fattening Blend Specification Parameters", key="save_fattening_btn"):
+                    if total_fattening != 100:
+                        st.error("Ratios must sum to exactly 100% before saving.")
+                    else:
+                        breakdown_str = ";".join([f"{k}:{v}" for k, v in ratios_fattening.items()])
+                        import sqlite3
+                        conn = sqlite3.connect("herd_management.db")
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "INSERT OR REPLACE INTO feed_recipes (recipe_type, calculated_mix_cost_per_kg, recipe_breakdown) VALUES (?, ?, ?)",
+                            ("Fattening", blend_cost_fattening, breakdown_str)
+                        )
+                        conn.commit()
+                        conn.close()
+                        st.success("Fattening feed parameters committed successfully!")
+                        st.rerun()
+
+            # 🧪 TAB 2: GENERAL HERD FORMULATION MATRIX
+            with tab2:
+                st.markdown("#### Adjust General Herd Ingredient Ratios (%)")
+                ratios_general = {}
+                for _, row in df_active_sliders.iterrows():
+                    ing_name = row["item_name"]
+                    default_val = get_saved_ratio_dynamic("General Herd", ing_name)
+                    ratios_general[ing_name] = st.slider(
+                        f"Ratio for {ing_name} (%)", 
+                        min_value=0, max_value=100, value=default_val, key=f"general_slide_{ing_name}"
+                    )
+                    
+                total_general = sum(ratios_general.values())
+                st.metric("Total Formulation Sum:", f"{total_general} %")
+                
+                blend_cost_general = sum((ratios_general[name] / 100.0) * price_lookup[name] for name in ratios_general)
+                st.info(f"**Calculated Blended General Feed Cost:** $ {blend_cost_general:.2f} per kg")
+                
+                if st.button("Save General Herd Blend Specification Parameters", key="save_general_btn"):
+                    if total_general != 100:
+                        st.error("Ratios must sum to exactly 100% before saving.")
+                    else:
+                        breakdown_str = ";".join([f"{k}:{v}" for k, v in ratios_general.items()])
+                        import sqlite3
+                        conn = sqlite3.connect("herd_management.db")
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "INSERT OR REPLACE INTO feed_recipes (recipe_type, calculated_mix_cost_per_kg, recipe_breakdown) VALUES (?, ?, ?)",
+                            ("General Herd", blend_cost_general, breakdown_str)
+                        )
+                        conn.commit()
+                        conn.close()
+                        st.success("General Herd feed parameters committed successfully!")
+                        st.rerun()
 
         # --- SUB-PANEL B: ADVANCED WAREHOUSE INVENTORY MANAGEMENT DESK ---
-    st.markdown("---")
-    st.subheader("📦 Warehouse Inventory Control Desk")
+        st.markdown("---")
+        st.subheader("📦 Warehouse Inventory Control Desk")
         
-        # Reload fresh dataframe for the control desk tabs
-    raw_inv_df = database.get_table_data("inventory")
-    if not raw_inv_df.empty and "is_active" in raw_inv_df.columns:
+        raw_inv_df = database.get_table_data("inventory")
+        if not raw_inv_df.empty and "is_active" in raw_inv_df.columns:
             df_active = raw_inv_df[raw_inv_df["is_active"] == 1]
             df_inactive = raw_inv_df[raw_inv_df["is_active"] == 0]
-    else:
+        else:
             df_active = raw_inv_df
             df_inactive = pd.DataFrame()
 
-    active_item_options = df_active["item_name"].tolist() if not df_active.empty else []
-    all_item_options = raw_inv_df["item_name"].tolist() if not raw_inv_df.empty else []
+        active_item_options = df_active["item_name"].tolist() if not df_active.empty else []
+        all_item_options = raw_inv_df["item_name"].tolist() if not raw_inv_df.empty else []
 
-        # Clean workspace separation using three operational tabs
-    tab_register, tab_purchase, tab_status = st.tabs([
+        tab_register, tab_purchase, tab_status = st.tabs([
             "✨ Step 1: Register New Ingredient", 
             "🚛 Step 2: Log Feed Purchases & Stock Adjustments",
             "⏸️ Step 3: Toggle Active / Historical Status"
         ])
         
-        # ------------------ TAB 1: REGISTRATION ------------------
-    with tab_register:
+        with tab_register:
             st.markdown("### Initial Item Setup")
             with st.form("registration_form_clean"):
                 col1, col2 = st.columns(2)
@@ -387,8 +453,7 @@ elif menu == "Feed Inventory Controller":
                         st.success(f"'{new_item_name}' successfully registered at $ {initial_cost}/kg!")
                         st.rerun()
 
-        # ------------------ TAB 2: PURCHASES ------------------
-    with tab_purchase:
+        with tab_purchase:
             st.markdown("### Log Warehouse Stock Movements")
             with st.form("purchase_movement_form_clean"):
                 col1, col2 = st.columns(2)
@@ -415,8 +480,7 @@ elif menu == "Feed Inventory Controller":
                     st.success(f"Warehouse Ledger updated for '{chosen_stock_item}' (Shift: {stock_shift} kg)!")
                     st.rerun()
 
-        # ------------------ TAB 3: STATUS TOGGLE ------------------
-    with tab_status:
+        with tab_status:
             st.markdown("### Change Ingredient Status Visibility")
             st.info("Deactivating an item hides its slider from the formulation page, but leaves all historical data untouched.")
             
@@ -459,11 +523,11 @@ elif menu == "Feed Inventory Controller":
                     else:
                         st.write("No archived items found.")
 
-    st.subheader("Active Feed Stock Valuation & Safety Parameters")
-    st.dataframe(raw_inv_df, use_container_width=True, hide_index=True)
+        st.subheader("Active Feed Stock Valuation & Safety Parameters")
+        st.dataframe(raw_inv_df, use_container_width=True, hide_index=True)
 
 
     # 🛠️ MODULE 6: DATA ENTRY CORRECTIONS PANEL
 elif menu == "Data Entry Corrections":
-        st.title("Data Entry Corrections & Direct SQL Ledger Overrides")
-        st.markdown("---")
+    st.title("Data Entry Corrections & Direct SQL Ledger Overrides")
+    st.markdown("---")
