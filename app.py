@@ -63,7 +63,7 @@ if menu == "Strategic Performance Metrics":
         st.markdown("### 📈 Structural Population Breakdowns")
         c1, c2 = st.columns(2)
         with c1:
-            cat_counts = active_animals["category"].value_value_counts().reset_index()
+            cat_counts = active_animals["category"].value_counts().reset_index()
             fig_cat = px.bar(
                 cat_counts,
                 x="category",
