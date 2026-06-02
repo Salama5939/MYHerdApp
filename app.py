@@ -406,18 +406,20 @@ elif menu == "Feed Inventory Controller":
     # Sub-Panel B: Raw Stock Movements & New Ingredient Registration
     st.markdown("---")
     st.subheader("📦 Warehouse Inventory Stock Adjustments & New Additions")
+
+    item_options = df_inv["item_name"].tolist() if not df_inv.empty else []
+
+    # 🌟 Moving this OUTSIDE the form block allows the interface to react instantly!
+    entry_mode = st.radio(
+        "Adjustment Action Type:",
+        ["Update Existing Stock", "Register Brand New Ingredient"],
+        horizontal=True,
+    )
+
     with st.form("inventory_adjustment_form"):
         col1, col2 = st.columns(2)
         with col1:
-            item_options = df_inv["item_name"].tolist() if not df_inv.empty else []
-
-            # 🆕 Added selection type toggle so the system knows if you are updating or adding fresh
-            entry_mode = st.radio(
-                "Adjustment Action Type:",
-                ["Update Existing Stock", "Register Brand New Ingredient"],
-                horizontal=True,
-            )
-
+            # The interface now perfectly switches instantly based on your click above
             if entry_mode == "Register Brand New Ingredient":
                 chosen_item = st.text_input(
                     "Type Brand New Ingredient Name (e.g., Radda, Wheat):"
@@ -461,12 +463,7 @@ elif menu == "Feed Inventory Controller":
                     f"Warehouse Ledger Account updated successfully for '{chosen_item}'!"
                 )
                 st.rerun()
-
-    st.subheader("Active Feed Stock Valuation & Safety Parameters")
-    st.dataframe(
-        database.get_table_data("inventory"), use_container_width=True, hide_index=True
-    )
-
+                
 # 🛠️ MODULE 6: DATA ENTRY CORRECTIONS PANEL
 elif menu == "Data Entry Corrections":
     st.title("Data Entry Corrections & Direct SQL Ledger Overrides")
