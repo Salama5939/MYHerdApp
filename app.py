@@ -340,10 +340,13 @@ elif menu == "Feed Inventory Controller":
 
     if not df_inv.empty and "is_active" not in df_inv.columns:
         import sqlite3
+
         conn = sqlite3.connect("herd_management.db")
         cursor = conn.cursor()
         try:
-            cursor.execute("ALTER TABLE inventory ADD COLUMN is_active INTEGER DEFAULT 1")
+            cursor.execute(
+                "ALTER TABLE inventory ADD COLUMN is_active INTEGER DEFAULT 1"
+            )
             conn.commit()
         except Exception:
             pass
@@ -356,15 +359,20 @@ elif menu == "Feed Inventory Controller":
         )
     else:
         # FILTER: Separate active elements from archived records
-        df_active_sliders = df_inv[df_inv["is_active"] == 1] if "is_active" in df_inv.columns else df_inv
+        df_active_sliders = (
+            df_inv[df_inv["is_active"] == 1]
+            if "is_active" in df_inv.columns
+            else df_inv
+        )
 
         # Create ingredient price map
         price_lookup = {
-                row["item_name"]: float(row["cost_per_kg"]) for _, row in df_active_sliders.iterrows()
-            }
+            row["item_name"]: float(row["cost_per_kg"])
+            for _, row in df_active_sliders.iterrows()
+        }
         cost_summary = " | ".join(
-                [f"{name}: **${cost}/kg**" for name, cost in price_lookup.items()]
-            )
+            [f"{name}: **${cost}/kg**" for name, cost in price_lookup.items()]
+        )
         st.markdown(f"**Current Ingredient Costs:** {cost_summary}")
 
         # ================================================================
@@ -446,7 +454,7 @@ elif menu == "Feed Inventory Controller":
                         "feed_recipes"
                     )
                     st.success("Fattening feed parameters committed successfully!")
-                    (st.rerun())
+                    st.rerun()
 
         # 🧪 TAB 2: GENERAL HERD FORMULATION MATRIX
         with tab2:
@@ -501,9 +509,8 @@ elif menu == "Feed Inventory Controller":
                         "feed_recipes"
                     )
                     st.success("General Herd feed parameters committed successfully!")
-                    (st.rerun()
-                    )
-                    
+                    st.rerun()
+
     # --- SUB-PANEL B: ADVANCED WAREHOUSE INVENTORY MANAGEMENT DESK ---
     st.markdown("---")
     st.subheader("📦 Warehouse Inventory Control Desk")
@@ -519,53 +526,80 @@ elif menu == "Feed Inventory Controller":
     active_item_options = df_active["item_name"].tolist() if not df_active.empty else []
     all_item_options = raw_inv_df["item_name"].tolist() if not raw_inv_df.empty else []
 
-    tab_register, tab_purchase, tab_status = st.tabs([
-            "✨ Step 1: Register New Ingredient", 
+    tab_register, tab_purchase, tab_status = st.tabs(
+        [
+            "✨ Step 1: Register New Ingredient",
             "🚛 Step 2: Log Feed Purchases & Stock Adjustments",
-            "⏸️ Step 3: Toggle Active / Historical Status"
-        ])
+            "⏸️ Step 3: Toggle Active / Historical Status",
+        ]
+    )
 
     with tab_register:
         st.markdown("### Initial Item Setup")
         with st.form("registration_form_clean"):
             col1, col2 = st.columns(2)
             with col1:
-                new_item_name = st.text_input("Type Brand New Ingredient Name (e.g., Wheat, Radda):").strip()
+                new_item_name = st.text_input(
+                    "Type Brand New Ingredient Name (e.g., Wheat, Radda):"
+                ).strip()
             with col2:
-                initial_cost = st.number_input("Set Baseline Unit Cost per 1 kg ($):", min_value=0.0, step=0.1, value=15.0)
+                initial_cost = st.number_input(
+                    "Set Baseline Unit Cost per 1 kg ($):",
+                    min_value=0.0,
+                    step=0.1,
+                    value=15.0,
+                )
 
+            st.markdown(
+                "<p style='color: #E6A23C; font-weight: bold;'>⚠️ Operational Notice: Registering or submitting here will clear the application data cache to refresh your sliders immediately.</p>",
+                unsafe_allow_html=True,
+            )
             submit_reg = st.form_submit_button("Register Ingredient with 0.0 kg Stock")
             if submit_reg:
                 if not new_item_name:
                     st.error("Validation Error: Ingredient name cannot be left blank.")
                 elif new_item_name in all_item_options:
                     import sqlite3
+
                     conn = sqlite3.connect("herd_management.db")
                     cursor = conn.cursor()
-                    cursor.execute("UPDATE inventory SET is_active = 1, cost_per_kg = ? WHERE item_name = ?", (initial_cost, new_item_name))
+                    cursor.execute(
+                        "UPDATE inventory SET is_active = 1, cost_per_kg = ? WHERE item_name = ?",
+                        (initial_cost, new_item_name),
+                    )
                     conn.commit()
                     conn.close()
-                    
-                    # ✨ Clear the cached inventory dataframe so sliders refresh immediately
+
+                    # ✨ Wipe out the stale memory state completely so tables and sliders sync
                     if "cached_inventory" in st.session_state:
                         del st.session_state.cached_inventory
-                        
-                    st.success(f"'{new_item_name}' was previously archived and has been safely reactivated!")
+
+                    st.success(
+                        f"'{new_item_name}' was previously archived and has been safely reactivated!"
+                    )
                     st.rerun()
                 else:
-                    database.adjust_inventory_stock_advanced(new_item_name, 0.0, initial_cost)
+                    database.adjust_inventory_stock_advanced(
+                        new_item_name, 0.0, initial_cost
+                    )
                     import sqlite3
+
                     conn = sqlite3.connect("herd_management.db")
                     cursor = conn.cursor()
-                    cursor.execute("UPDATE inventory SET is_active = 1 WHERE item_name = ?", (new_item_name,))
+                    cursor.execute(
+                        "UPDATE inventory SET is_active = 1 WHERE item_name = ?",
+                        (new_item_name,),
+                    )
                     conn.commit()
                     conn.close()
-                    
-                    # ✨ Clear the cached inventory dataframe so sliders refresh immediately
+
+                    # ✨ Wipe out the stale memory state completely so tables and sliders sync
                     if "cached_inventory" in st.session_state:
                         del st.session_state.cached_inventory
-                        
-                    st.success(f"'{new_item_name}' successfully registered at $ {initial_cost}/kg!")
+
+                    st.success(
+                        f"'{new_item_name}' successfully registered at $ {initial_cost}/kg!"
+                    )
                     st.rerun()
 
     with tab_purchase:
@@ -574,12 +608,22 @@ elif menu == "Feed Inventory Controller":
             col1, col2 = st.columns(2)
             with col1:
                 if active_item_options:
-                    chosen_stock_item = st.selectbox("Select Target Feed Ingredient:", active_item_options, key="purch_select")
+                    chosen_stock_item = st.selectbox(
+                        "Select Target Feed Ingredient:",
+                        active_item_options,
+                        key="purch_select",
+                    )
                 else:
-                    st.warning("No active ingredients available. Please register or reactivate items first.")
+                    st.warning(
+                        "No active ingredients available. Please register or reactivate items first."
+                    )
                     chosen_stock_item = None
 
-                stock_shift = st.number_input("Stock Volume Shift Value (+ Purchases, - Mix Drawdowns):", step=50.0, value=0.0)
+                stock_shift = st.number_input(
+                    "Stock Volume Shift Value (+ Purchases, - Mix Drawdowns):",
+                    step=50.0,
+                    value=0.0,
+                )
             with col2:
                 current_cost_val = 15.0
                 if chosen_stock_item and not df_active.empty:
@@ -587,17 +631,35 @@ elif menu == "Feed Inventory Controller":
                     if not match_row.empty:
                         current_cost_val = float(match_row.iloc[0]["cost_per_kg"])
 
-                updated_cost = st.number_input("Confirm/Update Unit Buying Cost ($/1 kg):", min_value=0.0, step=0.1, value=current_cost_val)
+                updated_cost = st.number_input(
+                    "Confirm/Update Unit Buying Cost ($/1 kg):",
+                    min_value=0.0,
+                    step=0.1,
+                    value=current_cost_val,
+                )
 
-            submit_purch = st.form_submit_button("Commit Movement Entry to Stock Ledger")
+            submit_purch = st.form_submit_button(
+                "Commit Movement Entry to Stock Ledger"
+            )
             if submit_purch and chosen_stock_item:
-                database.adjust_inventory_stock_advanced(chosen_stock_item, stock_shift, updated_cost)
-                st.success(f"Warehouse Ledger updated for '{chosen_stock_item}' (Shift: {stock_shift} kg)!")
+                database.adjust_inventory_stock_advanced(
+                    chosen_stock_item, stock_shift, updated_cost
+                )
+
+                # ✨ Wipe cache so stock and value updates reflect instantly across dashboards
+                if "cached_inventory" in st.session_state:
+                    del st.session_state.cached_inventory
+
+                st.success(
+                    f"Warehouse Ledger updated for '{chosen_stock_item}' (Shift: {stock_shift} kg)!"
+                )
                 st.rerun()
 
     with tab_status:
         st.markdown("### Change Ingredient Status Visibility")
-        st.info("Deactivating an item hides its slider from the formulation page, but leaves all historical data untouched.")
+        st.info(
+            "Deactivating an item hides its slider from the formulation page, but leaves all historical data untouched."
+        )
 
         col_deact, col_react = st.columns(2)
 
@@ -605,16 +667,31 @@ elif menu == "Feed Inventory Controller":
             st.markdown("#### ⏸️ Archive Unused Item")
             with st.form("deactivate_form"):
                 if active_item_options:
-                    to_deactivate = st.selectbox("Select Ingredient to Hide:", active_item_options, key="deact_box")
+                    to_deactivate = st.selectbox(
+                        "Select Ingredient to Hide:",
+                        active_item_options,
+                        key="deact_box",
+                    )
                     submit_deact = st.form_submit_button("Mark as Inactive / Archive")
                     if submit_deact and to_deactivate:
                         import sqlite3
+
                         conn = sqlite3.connect("herd_management.db")
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE inventory SET is_active = 0 WHERE item_name = ?", (to_deactivate,))
+                        cursor.execute(
+                            "UPDATE inventory SET is_active = 0 WHERE item_name = ?",
+                            (to_deactivate,),
+                        )
                         conn.commit()
                         conn.close()
-                        st.success(f"'{to_deactivate}' is now hidden from active formulation sliders.")
+
+                        # ✨ Wipe cache so archived items disappear instantly from the slider row list
+                        if "cached_inventory" in st.session_state:
+                            del st.session_state.cached_inventory
+
+                        st.success(
+                            f"'{to_deactivate}' is now hidden from active formulation sliders."
+                        )
                         st.rerun()
                 else:
                     st.write("No active items to hide.")
@@ -622,25 +699,41 @@ elif menu == "Feed Inventory Controller":
         with col_react:
             st.markdown("#### ▶️ Reactivate Historical Item")
             with st.form("reactivate_form"):
-                inactive_options = df_inactive["item_name"].tolist() if not df_inactive.empty else []
+                inactive_options = (
+                    df_inactive["item_name"].tolist() if not df_inactive.empty else []
+                )
                 if inactive_options:
-                    to_reactivate = st.selectbox("Select Ingredient to Restore:", inactive_options, key="react_box")
+                    to_reactivate = st.selectbox(
+                        "Select Ingredient to Restore:",
+                        inactive_options,
+                        key="react_box",
+                    )
                     submit_react = st.form_submit_button("Restore to Active Duty")
                     if submit_react and to_reactivate:
                         import sqlite3
+
                         conn = sqlite3.connect("herd_management.db")
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE inventory SET is_active = 1 WHERE item_name = ?", (to_reactivate,))
+                        cursor.execute(
+                            "UPDATE inventory SET is_active = 1 WHERE item_name = ?",
+                            (to_reactivate,),
+                        )
                         conn.commit()
                         conn.close()
-                        st.success(f"'{to_reactivate}' has been restored to your active slider dashboard!")
+
+                        # ✨ Wipe cache so reactivated items reappear instantly on sliders
+                        if "cached_inventory" in st.session_state:
+                            del st.session_state.cached_inventory
+
+                        st.success(
+                            f"'{to_reactivate}' has been restored to your active slider dashboard!"
+                        )
                         st.rerun()
                 else:
                     st.write("No archived items found.")
 
     st.subheader("Active Feed Stock Valuation & Safety Parameters")
     st.dataframe(raw_inv_df, use_container_width=True, hide_index=True)
-
 
 # 🛠️ MODULE 6: DATA ENTRY CORRECTIONS PANEL
 elif menu == "Data Entry Corrections":
