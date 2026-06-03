@@ -269,12 +269,37 @@ elif menu == "Growth Performance Logs":
     st.subheader("Historical Weight Logs Matrix Grid")
     st.dataframe(df_weights, use_container_width=True, hide_index=True)
 
+#=================New Modifications By Gemini Dated 03-06-2026=================
 # 🌾 MODULE 5: FEED INVENTORY & RECIPE CALCULATOR
 elif menu == "Feed Inventory Controller":
     st.title("Warehouse Inventory & Blended Feed Recipe Calculators")
     st.markdown("---")
     st.subheader("🧪 Interactive Feed Recipe Cost Formulation Desks")
 
+        # 🚀 LOCAL INITIALIZATION CHECK WITH SAFETY TIMEOUTS
+    import sqlite3
+    conn = sqlite3.connect("herd_management.db", timeout=20)
+    cursor = conn.cursor()
+    cursor.execute("""
+            CREATE TABLE IF NOT EXISTS inventory (
+                item_name TEXT PRIMARY KEY,
+                quantity_kg REAL DEFAULT 0.0,
+                reorder_level_kg REAL DEFAULT 0.0,
+                cost_per_kg REAL DEFAULT 15.0,
+                is_active INTEGER DEFAULT 1
+            )
+        """)
+    cursor.execute("""
+            CREATE TABLE IF NOT EXISTS feed_recipes (
+                recipe_type TEXT PRIMARY KEY,
+                calculated_mix_cost_per_kg REAL DEFAULT 0.0,
+                recipe_breakdown TEXT DEFAULT ''
+            )
+        """)
+    conn.commit()
+    conn.close()
+
+        # Load the data smoothly now that the database lock is safely managed
     df_inv = database.get_table_data("inventory")
     df_recipes = database.get_table_data("feed_recipes")
 
