@@ -277,11 +277,17 @@ elif menu == "Feed Inventory Controller":
     st.markdown("---")
     st.subheader("🧪 Interactive Feed Recipe Cost Formulation Desks")
 
-    # 🚀 LOCAL INITIALIZATION CHECK WITH SAFETY TIMEOUTS
+# 🚀 LOCAL INITIALIZATION CHECK WITH SAFETY TIMEOUTS
     import sqlite3
 
     conn = sqlite3.connect("herd_management.db", timeout=20)
     cursor = conn.cursor()
+    
+    # --- TEMPORARY CLEAN SLATE COMMANDS ---
+    cursor.execute("DROP TABLE IF EXISTS inventory;")
+    cursor.execute("DROP TABLE IF EXISTS feed_recipes;")
+    # --------------------------------------
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS inventory (
             item_name TEXT PRIMARY KEY,
@@ -300,7 +306,7 @@ elif menu == "Feed Inventory Controller":
     """)
     conn.commit()
     conn.close()
-
+    
     # ✨ HIGH-SPEED MEMORY CACHE LOADING (Eliminates the 30-40 second delay)
     if "cached_inventory" not in st.session_state:
         st.session_state.cached_inventory = database.get_table_data("inventory")
