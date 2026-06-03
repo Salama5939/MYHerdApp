@@ -367,10 +367,14 @@ elif menu == "Feed Inventory Controller":
             )
         st.markdown(f"**Current Ingredient Costs:** {cost_summary}")
 
-        # Helper function to decode dynamic values stored in the breakdown column
+        # ================================================================
+        # New Helper function to decode dynamic values stored in the breakdown column and set slider defaults accordingly. This allows us to maintain historical recipe configurations
+        # and reconstruct the slider states on page load without needing a separate table structure for ratios.
         def get_saved_ratio_dynamic(recipe_type, item_name):
-            if not df_recipes.empty:
-                match = df_recipes[df_recipes["recipe_type"] == recipe_type]
+            # Use our cached recipes dataframe instead of a direct database pull
+            cached_df = st.session_state.cached_recipes
+            if cached_df is not None and not cached_df.empty:
+                match = cached_df[cached_df["recipe_type"] == recipe_type]
                 if not match.empty and "recipe_breakdown" in match.columns:
                     breakdown = str(match["recipe_breakdown"].values[0])
                     if breakdown and ":" in breakdown:
@@ -385,6 +389,7 @@ elif menu == "Feed Inventory Controller":
                                         return 0
             return 0
 
+        # ==========================================================================
         # --- DRAWING THE INTERACTIVE RECIPE SLIDER ENGAGEMENT DESK ---
         tab1, tab2 = st.tabs(["Fattening Formulation", "General Herd Formulation"])
 
@@ -396,32 +401,52 @@ elif menu == "Feed Inventory Controller":
                 ing_name = row["item_name"]
                 default_val = get_saved_ratio_dynamic("Fattening", ing_name)
                 ratios_fattening[ing_name] = st.slider(
-                        f"Ratio for {ing_name} (%)", 
-                        min_value=0, max_value=100, value=default_val, key=f"fattening_slide_{ing_name}"
-                    )
+                    f"Ratio for {ing_name} (%)",
+                    min_value=0,
+                    max_value=100,
+                    value=default_val,
+                    key=f"fattening_slide_{ing_name}",
+                )
 
             total_fattening = sum(ratios_fattening.values())
             st.metric("Total Formulation Sum:", f"{total_fattening} %")
 
-            blend_cost_fattening = sum((ratios_fattening[name] / 100.0) * price_lookup[name] for name in ratios_fattening)
-            st.info(f"**Calculated Blended Fattening Feed Cost:** $ {blend_cost_fattening:.2f} per kg")
+            blend_cost_fattening = sum(
+                (ratios_fattening[name] / 100.0) * price_lookup[name]
+                for name in ratios_fattening
+            )
+            st.info(
+                f"**Calculated Blended Fattening Feed Cost:** $ {blend_cost_fattening:.2f} per kg"
+            )
 
-            if st.button("Save Fattening Blend Specification Parameters", key="save_fattening_btn"):
+            if st.button(
+                "Save Fattening Blend Specification Parameters",
+                key="save_fattening_btn",
+            ):
                 if total_fattening != 100:
                     st.error("Ratios must sum to exactly 100% before saving.")
                 else:
-                    breakdown_str = ";".join([f"{k}:{v}" for k, v in ratios_fattening.items()])
+                    breakdown_str = ";".join(
+                        [f"{k}:{v}" for k, v in ratios_fattening.items()]
+                    )
                     import sqlite3
-                    conn = sqlite3.connect("herd_management.db")
+
+                    # Added safety timeout=20 to fix any potential connection lags
+                    conn = sqlite3.connect("herd_management.db", timeout=20)
                     cursor = conn.cursor()
                     cursor.execute(
-                            "INSERT OR REPLACE INTO feed_recipes (recipe_type, calculated_mix_cost_per_kg, recipe_breakdown) VALUES (?, ?, ?)",
-                            ("Fattening", blend_cost_fattening, breakdown_str)
-                        )
+                        "INSERT OR REPLACE INTO feed_recipes (recipe_type, calculated_mix_cost_per_kg, recipe_breakdown) VALUES (?, ?, ?)",
+                        ("Fattening", blend_cost_fattening, breakdown_str),
+                    )
                     conn.commit()
                     conn.close()
+
+                    # ✨ Update fast memory cache immediately so slider selections persist
+                    st.session_state.cached_recipes = database.get_table_data(
+                        "feed_recipes"
+                    )
                     st.success("Fattening feed parameters committed successfully!")
-                    st.rerun()
+                    (st.rerun())
 
         # 🧪 TAB 2: GENERAL HERD FORMULATION MATRIX
         with tab2:
@@ -431,33 +456,54 @@ elif menu == "Feed Inventory Controller":
                 ing_name = row["item_name"]
                 default_val = get_saved_ratio_dynamic("General Herd", ing_name)
                 ratios_general[ing_name] = st.slider(
-                        f"Ratio for {ing_name} (%)", 
-                        min_value=0, max_value=100, value=default_val, key=f"general_slide_{ing_name}"
-                    )
+                    f"Ratio for {ing_name} (%)",
+                    min_value=0,
+                    max_value=100,
+                    value=default_val,
+                    key=f"general_slide_{ing_name}",
+                )
 
             total_general = sum(ratios_general.values())
             st.metric("Total Formulation Sum:", f"{total_general} %")
 
-            blend_cost_general = sum((ratios_general[name] / 100.0) * price_lookup[name] for name in ratios_general)
-            st.info(f"**Calculated Blended General Feed Cost:** $ {blend_cost_general:.2f} per kg")
+            blend_cost_general = sum(
+                (ratios_general[name] / 100.0) * price_lookup[name]
+                for name in ratios_general
+            )
+            st.info(
+                f"**Calculated Blended General Feed Cost:** $ {blend_cost_general:.2f} per kg"
+            )
 
-            if st.button("Save General Herd Blend Specification Parameters", key="save_general_btn"):
+            if st.button(
+                "Save General Herd Blend Specification Parameters",
+                key="save_general_btn",
+            ):
                 if total_general != 100:
                     st.error("Ratios must sum to exactly 100% before saving.")
                 else:
-                    breakdown_str = ";".join([f"{k}:{v}" for k, v in ratios_general.items()])
+                    breakdown_str = ";".join(
+                        [f"{k}:{v}" for k, v in ratios_general.items()]
+                    )
                     import sqlite3
-                    conn = sqlite3.connect("herd_management.db")
+
+                    # Added safety timeout=20 to fix any potential connection lags
+                    conn = sqlite3.connect("herd_management.db", timeout=20)
                     cursor = conn.cursor()
                     cursor.execute(
-                            "INSERT OR REPLACE INTO feed_recipes (recipe_type, calculated_mix_cost_per_kg, recipe_breakdown) VALUES (?, ?, ?)",
-                            ("General Herd", blend_cost_general, breakdown_str)
-                        )
+                        "INSERT OR REPLACE INTO feed_recipes (recipe_type, calculated_mix_cost_per_kg, recipe_breakdown) VALUES (?, ?, ?)",
+                        ("General Herd", blend_cost_general, breakdown_str),
+                    )
                     conn.commit()
                     conn.close()
-                    st.success("General Herd feed parameters committed successfully!")
-                    st.rerun()
 
+                    # ✨ Update fast memory cache immediately so slider selections persist
+                    st.session_state.cached_recipes = database.get_table_data(
+                        "feed_recipes"
+                    )
+                    st.success("General Herd feed parameters committed successfully!")
+                    (st.rerun()
+                    )
+                    
     # --- SUB-PANEL B: ADVANCED WAREHOUSE INVENTORY MANAGEMENT DESK ---
     st.markdown("---")
     st.subheader("📦 Warehouse Inventory Control Desk")
