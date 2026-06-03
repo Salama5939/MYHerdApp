@@ -269,39 +269,46 @@ elif menu == "Growth Performance Logs":
     st.subheader("Historical Weight Logs Matrix Grid")
     st.dataframe(df_weights, use_container_width=True, hide_index=True)
 
-#=================New Modifications By Gemini Dated 03-06-2026=================
+# =================New Modifications By Gemini Dated 03-06-2026=================
 # 🌾 MODULE 5: FEED INVENTORY & RECIPE CALCULATOR
 elif menu == "Feed Inventory Controller":
     st.title("Warehouse Inventory & Blended Feed Recipe Calculators")
     st.markdown("---")
     st.subheader("🧪 Interactive Feed Recipe Cost Formulation Desks")
 
-        # 🚀 LOCAL INITIALIZATION CHECK WITH SAFETY TIMEOUTS
+    # 🚀 LOCAL INITIALIZATION CHECK WITH SAFETY TIMEOUTS
     import sqlite3
+
     conn = sqlite3.connect("herd_management.db", timeout=20)
     cursor = conn.cursor()
     cursor.execute("""
-            CREATE TABLE IF NOT EXISTS inventory (
-                item_name TEXT PRIMARY KEY,
-                quantity_kg REAL DEFAULT 0.0,
-                reorder_level_kg REAL DEFAULT 0.0,
-                cost_per_kg REAL DEFAULT 15.0,
-                is_active INTEGER DEFAULT 1
-            )
-        """)
+        CREATE TABLE IF NOT EXISTS inventory (
+            item_name TEXT PRIMARY KEY,
+            quantity_kg REAL DEFAULT 0.0,
+            reorder_level_kg REAL DEFAULT 0.0,
+            cost_per_kg REAL DEFAULT 15.0,
+            is_active INTEGER DEFAULT 1
+        )
+    """)
     cursor.execute("""
-            CREATE TABLE IF NOT EXISTS feed_recipes (
-                recipe_type TEXT PRIMARY KEY,
-                calculated_mix_cost_per_kg REAL DEFAULT 0.0,
-                recipe_breakdown TEXT DEFAULT ''
-            )
-        """)
+        CREATE TABLE IF NOT EXISTS feed_recipes (
+            recipe_type TEXT PRIMARY KEY,
+            calculated_mix_cost_per_kg REAL DEFAULT 0.0,
+            recipe_breakdown TEXT DEFAULT ''
+        )
+    """)
     conn.commit()
     conn.close()
 
-        # Load the data smoothly now that the database lock is safely managed
-    df_inv = database.get_table_data("inventory")
-    df_recipes = database.get_table_data("feed_recipes")
+    # ✨ HIGH-SPEED MEMORY CACHE LOADING (Eliminates the 30-40 second delay)
+    if "cached_inventory" not in st.session_state:
+        st.session_state.cached_inventory = database.get_table_data("inventory")
+    if "cached_recipes" not in st.session_state:
+        st.session_state.cached_recipes = database.get_table_data("feed_recipes")
+
+    # Assign live data frames directly from our fast memory cache
+    df_inv = st.session_state.cached_inventory
+    df_recipes = st.session_state.cached_recipes
 
     # ==============================Corrections Done By Gemini Dated 03-06-2026==================
     # Newly added recipe_breakdown column will store dynamic ingredient ratio values in a structured
@@ -327,7 +334,7 @@ elif menu == "Feed Inventory Controller":
         conn.close()
         # Reload fresh table with the newly initialized text column structure
         df_recipes = database.get_table_data("feed_recipes")
-#==========================End of Correction===================================
+    # ==========================End of Correction===================================
 
     # SAFETY FILTER STRUCTURAL CHECK: Ensure our tracking column flag exists
 
