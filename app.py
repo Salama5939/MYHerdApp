@@ -1,4 +1,4 @@
-# myHerdApp Engine - Comprehensive Herd Management Dashboard    
+# myHerdApp Engine - Comprehensive Herd Management Dashboard
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -277,16 +277,12 @@ elif menu == "Feed Inventory Controller":
     st.markdown("---")
     st.subheader("🧪 Interactive Feed Recipe Cost Formulation Desks")
 
-# 🚀 LOCAL INITIALIZATION CHECK WITH SAFETY TIMEOUTS
+    # 🚀 ISOLATED INITIALIZATION FOR FEED INVENTORY
     import sqlite3
 
-    conn = sqlite3.connect("herd_management.db", timeout=20)
+    # Using a dedicated database file prevents file-locking conflicts with the main herd records
+    conn = sqlite3.connect("feed_inventory.db", timeout=20)
     cursor = conn.cursor()
-    
-    # --- TEMPORARY CLEAN SLATE COMMANDS ---
-    cursor.execute("DROP TABLE IF EXISTS inventory;")
-    cursor.execute("DROP TABLE IF EXISTS feed_recipes;")
-    # --------------------------------------
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS inventory (
