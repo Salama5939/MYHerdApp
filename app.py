@@ -545,6 +545,11 @@ elif menu == "Feed Inventory Controller":
                     cursor.execute("UPDATE inventory SET is_active = 1, cost_per_kg = ? WHERE item_name = ?", (initial_cost, new_item_name))
                     conn.commit()
                     conn.close()
+                    
+                    # ✨ Clear the cached inventory dataframe so sliders refresh immediately
+                    if "cached_inventory" in st.session_state:
+                        del st.session_state.cached_inventory
+                        
                     st.success(f"'{new_item_name}' was previously archived and has been safely reactivated!")
                     st.rerun()
                 else:
@@ -555,6 +560,11 @@ elif menu == "Feed Inventory Controller":
                     cursor.execute("UPDATE inventory SET is_active = 1 WHERE item_name = ?", (new_item_name,))
                     conn.commit()
                     conn.close()
+                    
+                    # ✨ Clear the cached inventory dataframe so sliders refresh immediately
+                    if "cached_inventory" in st.session_state:
+                        del st.session_state.cached_inventory
+                        
                     st.success(f"'{new_item_name}' successfully registered at $ {initial_cost}/kg!")
                     st.rerun()
 
