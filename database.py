@@ -57,19 +57,17 @@ def init_db():
             item_name TEXT PRIMARY KEY,
             quantity_kg REAL NOT NULL DEFAULT 0.0,
             reorder_level_kg REAL NOT NULL DEFAULT 100.0,
-            cost_per_kg REAL NOT NULL DEFAULT 0.0
+            cost_per_kg REAL NOT NULL DEFAULT 0.0,
+            is_active INTEGER NOT NULL DEFAULT 1
         );
     """)
 
-    # Updated table layout to dynamically store comprehensive ingredient matrix profiles textually
+    # FIXED: Simplified layout to exactly match the dynamic 3-column parameters required by app.py
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS feed_recipes (
             recipe_type TEXT PRIMARY KEY CHECK(recipe_type IN ('Fattening', 'General Herd')),
-            corn_pct REAL NOT NULL DEFAULT 0.0,
-            soybean_pct REAL NOT NULL DEFAULT 0.0,
-            hay_pct REAL NOT NULL DEFAULT 0.0,
-            recipe_breakdown TEXT DEFAULT '',
-            calculated_mix_cost_per_kg REAL NOT NULL DEFAULT 0.0
+            calculated_mix_cost_per_kg REAL NOT NULL DEFAULT 0.0,
+            recipe_breakdown TEXT DEFAULT ''
         );
     """)
 
@@ -192,7 +190,7 @@ def sell_or_slaughter_animal(tag_no, structural_status, sale_price=None, date_st
 
 
 def adjust_inventory_stock_advanced(item_name, amount_kg, cost_per_kg):
-    """Safely adjusts raw ingredient balances matching the strict 4-column layout."""
+    """Safely adjusts raw ingredient balances matching the strict layout."""
     conn = create_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -213,8 +211,8 @@ def adjust_inventory_stock_advanced(item_name, amount_kg, cost_per_kg):
     else:
         cursor.execute(
             """
-            INSERT INTO inventory (item_name, quantity_kg, reorder_level_kg, cost_per_kg) 
-            VALUES (?, ?, 100.0, ?)
+            INSERT INTO inventory (item_name, quantity_kg, reorder_level_kg, cost_per_kg, is_active) 
+            VALUES (?, ?, 100.0, ?, 1)
         """,
             (item_name, max(0.0, float(amount_kg)), float(cost_per_kg)),
         )
@@ -231,43 +229,18 @@ def save_feed_recipe_advanced(recipe_type, breakdown_string, calculated_cost):
     conn = create_connection()
     cursor = conn.cursor()
 
-    # Extract baseline numbers safely for historical backward compatibility
-    corn_val = 0
-    soy_val = 0
-    hay_val = 0
-
-    try:
-        parts = breakdown_string.split(";")
-        for p in parts:
-            if ":" in p:
-                name, val = p.split(":")
-                if "Corn" in name:
-                    corn_val = int(val)
-                elif "Soybean" in name:
-                    soy_val = int(val)
-                elif "Hay" in name or "Barseem" in name:
-                    hay_val += int(val)
-    except Exception:
-        pass
-
     cursor.execute(
         """
-        INSERT INTO feed_recipes (recipe_type, corn_pct, soybean_pct, hay_pct, recipe_breakdown, calculated_mix_cost_per_kg)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO feed_recipes (recipe_type, calculated_mix_cost_per_kg, recipe_breakdown)
+        VALUES (?, ?, ?)
         ON CONFLICT(recipe_type) DO UPDATE SET
-            corn_pct = excluded.corn_pct,
-            soybean_pct = excluded.soybean_pct,
-            hay_pct = excluded.hay_pct,
-            recipe_breakdown = excluded.recipe_breakdown,
-            calculated_mix_cost_per_kg = excluded.calculated_mix_cost_per_kg
+            calculated_mix_cost_per_kg = excluded.calculated_mix_cost_per_kg,
+            recipe_breakdown = excluded.recipe_breakdown
     """,
         (
             recipe_type,
-            corn_val,
-            soy_val,
-            hay_val,
-            breakdown_string,
             float(calculated_cost),
+            breakdown_string,
         ),
     )
 
