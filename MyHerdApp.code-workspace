@@ -1,15 +1,17 @@
 {
   "folders": [
-    {
-      "path": "../MyHerdApp",
-    },
-    {
-      "path": ".",
-    },
-  ],
+	{
+		"name": "MyHerdApp",
+		"path": "."
+	}
+],
   "settings": {
-   // "liveServer.settings.multiRootWorkspaceName": "MyHerdApp",
-   // "liveServer.settings.port": 5501,
-    "files.autoGuessEncoding": true,
-  },
+    "python-envs.pythonProjects": [
+      {
+        "path": ".",
+        "envManager": "ms-python.python:system",
+        "packageManager": "ms-python.python:pip"
+      }
+    ]
+  }
 }
