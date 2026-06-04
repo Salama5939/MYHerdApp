@@ -278,13 +278,14 @@ elif menu == "Feed Inventory Controller":
     st.subheader("🧪 Interactive Feed Recipe Cost Formulation Desks")
 
     # 🚀 ISOLATED INITIALIZATION FOR FEED INVENTORY
-    import sqlite3
+import sqlite3
+import pandas as pd
 
-    # Using a dedicated database file prevents file-locking conflicts with the main herd records
-    conn = sqlite3.connect("feed_inventory.db", timeout=20)
-    cursor = conn.cursor()
+    # 🚀 ISOLATED CONNECTION TO OUR DEDICATED LEDGER
+conn = sqlite3.connect("feed_inventory.db", timeout=20)
+cursor = conn.cursor()
 
-    cursor.execute("""
+cursor.execute("""
         CREATE TABLE IF NOT EXISTS inventory (
             item_name TEXT PRIMARY KEY,
             quantity_kg REAL DEFAULT 0.0,
@@ -293,82 +294,78 @@ elif menu == "Feed Inventory Controller":
             is_active INTEGER DEFAULT 1
         )
     """)
-    cursor.execute("""
+cursor.execute("""
         CREATE TABLE IF NOT EXISTS feed_recipes (
             recipe_type TEXT PRIMARY KEY,
             calculated_mix_cost_per_kg REAL DEFAULT 0.0,
             recipe_breakdown TEXT DEFAULT ''
         )
     """)
-    conn.commit()
-    conn.close()
+conn.commit()
+conn.close()
     
-    # ✨ HIGH-SPEED MEMORY CACHE LOADING (Eliminates the 30-40 second delay)
-    if "cached_inventory" not in st.session_state:
-        st.session_state.cached_inventory = database.get_table_data("inventory")
-    if "cached_recipes" not in st.session_state:
-        st.session_state.cached_recipes = database.get_table_data("feed_recipes")
+    # ⚡ DIRECT EXTRACTION (Bypasses external hardcoded fallback functions completely)
+if "cached_inventory" not in st.session_state:
+        conn = sqlite3.connect("feed_inventory.db", timeout=20)
+        st.session_state.cached_inventory = pd.read_sql_query("SELECT * FROM inventory", conn)
+        conn.close()
+        
+if "cached_recipes" not in st.session_state:
+        conn = sqlite3.connect("feed_inventory.db", timeout=20)
+        st.session_state.cached_recipes = pd.read_sql_query("SELECT * FROM feed_recipes", conn)
+        conn.close()
 
-    # Assign live data frames directly from our fast memory cache
-    df_inv = st.session_state.cached_inventory
-    df_recipes = st.session_state.cached_recipes
+    # Assign live data frames from our clean session memory cache
+df_inv = st.session_state.cached_inventory
+df_recipes = st.session_state.cached_recipes
 
-    # ==============================Corrections Done By Gemini Dated 03-06-2026==================
-    # Newly added recipe_breakdown column will store dynamic ingredient ratio values in a structured
-    # string format (e.g., "Wheat:50;Radda:30;Barley:20") for each recipe type, allowing us to
-    # reconstruct slider defaults on page load and maintain historical recipe configurations
-    # without needing a separate table structure. This approach provides flexibility for future
-    # expansion to more complex recipes while keeping the current implementation straightforward.
-    # ============================================================================================
-
-    # 🌟 SAFETY FILTER STRUCTURAL CHECK: Ensure our recipe column flag exists
-    if not df_recipes.empty and "recipe_breakdown" not in df_recipes.columns:
-        import sqlite3
-
-        conn = sqlite3.connect("herd_management.db")
+    # 🌟 STRUCTURAL CHECKS (Updated to talk to feed_inventory.db exclusively)
+if not df_recipes.empty and "recipe_breakdown" not in df_recipes.columns:
+        conn = sqlite3.connect("feed_inventory.db", timeout=20)
         cursor = conn.cursor()
         try:
-            cursor.execute(
-                "ALTER TABLE feed_recipes ADD COLUMN recipe_breakdown TEXT DEFAULT ''"
-            )
+            cursor.execute("ALTER TABLE feed_recipes ADD COLUMN recipe_breakdown TEXT DEFAULT ''")
             conn.commit()
         except Exception:
             pass
         conn.close()
-        # Reload fresh table with the newly initialized text column structure
-        df_recipes = database.get_table_data("feed_recipes")
-    # ==========================End of Correction===================================
+        
+        conn = sqlite3.connect("feed_inventory.db", timeout=20)
+        df_recipes = pd.read_sql_query("SELECT * FROM feed_recipes", conn)
+        conn.close()
+        st.session_state.cached_recipes = df_recipes
 
-    # SAFETY FILTER STRUCTURAL CHECK: Ensure our tracking column flag exists
-
-    if not df_inv.empty and "is_active" not in df_inv.columns:
-        import sqlite3
-
-        conn = sqlite3.connect("herd_management.db")
+if not df_inv.empty and "is_active" not in df_inv.columns:
+        conn = sqlite3.connect("feed_inventory.db", timeout=20)
         cursor = conn.cursor()
         try:
-            cursor.execute(
-                "ALTER TABLE inventory ADD COLUMN is_active INTEGER DEFAULT 1"
-            )
+            cursor.execute("ALTER TABLE inventory ADD COLUMN is_active INTEGER DEFAULT 1")
             conn.commit()
         except Exception:
             pass
         conn.close()
-        df_inv = database.get_table_data("inventory")
+        
+        conn = sqlite3.connect("feed_inventory.db", timeout=20)
+        df_inv = pd.read_sql_query("SELECT * FROM inventory", conn)
+        conn.close()
+        st.session_state.cached_inventory = df_inv
 
-    if df_inv.empty:
+    # --- SETUP LIVE RENDER OBJECTS ---
+    # Setup data structures for tracking tables and dropdown select options
+raw_inv_df = df_inv.copy()
+df_inactive = df_inv[df_inv["is_active"] == 0] if "is_active" in df_inv.columns else pd.DataFrame()
+df_active = df_inv[df_inv["is_active"] == 1] if "is_active" in df_inv.columns else df_inv
+active_item_options = df_active["item_name"].tolist() if not df_active.empty else []
+
+if df_inv.empty:
         st.warning(
-            "⚠️ Inventory is empty. Please add raw feed commodities via the Data Entry Corrections panel first."
+            "⚠️ Feed stock database is currently empty. Please type an item name below to register your first commodity record!"
         )
-    else:
-        # FILTER: Separate active elements from archived records
-        df_active_sliders = (
-            df_inv[df_inv["is_active"] == 1]
-            if "is_active" in df_inv.columns
-            else df_inv
-        )
+        df_active_sliders = pd.DataFrame()
+else:
+        df_active_sliders = df_active
 
-        # Create ingredient price map
+        # Create ingredient price map dynamically from user database
         price_lookup = {
             row["item_name"]: float(row["cost_per_kg"])
             for _, row in df_active_sliders.iterrows()
@@ -378,11 +375,8 @@ elif menu == "Feed Inventory Controller":
         )
         st.markdown(f"**Current Ingredient Costs:** {cost_summary}")
 
-        # ================================================================
-        # New Helper function to decode dynamic values stored in the breakdown column and set slider defaults accordingly. This allows us to maintain historical recipe configurations
-        # and reconstruct the slider states on page load without needing a separate table structure for ratios.
+        # Helper function to decode values stored in the breakdown column
         def get_saved_ratio_dynamic(recipe_type, item_name):
-            # Use our cached recipes dataframe instead of a direct database pull
             cached_df = st.session_state.cached_recipes
             if cached_df is not None and not cached_df.empty:
                 match = cached_df[cached_df["recipe_type"] == recipe_type]
@@ -399,7 +393,6 @@ elif menu == "Feed Inventory Controller":
                                     except ValueError:
                                         return 0
             return 0
-
         # ==========================================================================
         # --- DRAWING THE INTERACTIVE RECIPE SLIDER ENGAGEMENT DESK ---
         tab1, tab2 = st.tabs(["Fattening Formulation", "General Herd Formulation"])
@@ -515,230 +508,230 @@ elif menu == "Feed Inventory Controller":
                     st.rerun()
 
     # --- SUB-PANEL B: ADVANCED WAREHOUSE INVENTORY MANAGEMENT DESK ---
-    st.markdown("---")
-    st.subheader("📦 Warehouse Inventory Control Desk")
+            st.markdown("---")
+        st.subheader("📦 Warehouse Inventory Control Desk")
 
-    raw_inv_df = database.get_table_data("inventory")
-    if not raw_inv_df.empty and "is_active" in raw_inv_df.columns:
-        df_active = raw_inv_df[raw_inv_df["is_active"] == 1]
-        df_inactive = raw_inv_df[raw_inv_df["is_active"] == 0]
-    else:
-        df_active = raw_inv_df
-        df_inactive = pd.DataFrame()
+        raw_inv_df = database.get_table_data("inventory")
+        if not raw_inv_df.empty and "is_active" in raw_inv_df.columns:
+                df_active = raw_inv_df[raw_inv_df["is_active"] == 1]
+                df_inactive = raw_inv_df[raw_inv_df["is_active"] == 0]
+        else:
+                df_active = raw_inv_df
+                df_inactive = pd.DataFrame()
 
-    active_item_options = df_active["item_name"].tolist() if not df_active.empty else []
-    all_item_options = raw_inv_df["item_name"].tolist() if not raw_inv_df.empty else []
+        active_item_options = df_active["item_name"].tolist() if not df_active.empty else []
+        all_item_options = raw_inv_df["item_name"].tolist() if not raw_inv_df.empty else []
 
-    tab_register, tab_purchase, tab_status = st.tabs(
-        [
-            "✨ Step 1: Register New Ingredient",
-            "🚛 Step 2: Log Feed Purchases & Stock Adjustments",
-            "⏸️ Step 3: Toggle Active / Historical Status",
-        ]
-    )
-
-    with tab_register:
-        st.markdown("### Initial Item Setup")
-        with st.form("registration_form_clean"):
-            col1, col2 = st.columns(2)
-            with col1:
-                new_item_name = st.text_input(
-                    "Type Brand New Ingredient Name (e.g., Wheat, Radda):"
-                ).strip()
-            with col2:
-                initial_cost = st.number_input(
-                    "Set Baseline Unit Cost per 1 kg ($):",
-                    min_value=0.0,
-                    step=0.1,
-                    value=15.0,
-                )
-
-            st.markdown(
-                "<p style='color: #E6A23C; font-weight: bold;'>⚠️ Operational Notice: Registering or submitting here will clear the application data cache to refresh your sliders immediately.</p>",
-                unsafe_allow_html=True,
+        tab_register, tab_purchase, tab_status = st.tabs(
+                [
+                    "✨ Step 1: Register New Ingredient",
+                    "🚛 Step 2: Log Feed Purchases & Stock Adjustments",
+                    "⏸️ Step 3: Toggle Active / Historical Status",
+                ]
             )
-            submit_reg = st.form_submit_button("Register Ingredient with 0.0 kg Stock")
-            if submit_reg:
-                if not new_item_name:
-                    st.error("Validation Error: Ingredient name cannot be left blank.")
-                elif new_item_name in all_item_options:
-                    import sqlite3
 
-                    conn = sqlite3.connect("herd_management.db")
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "UPDATE inventory SET is_active = 1, cost_per_kg = ? WHERE item_name = ?",
-                        (initial_cost, new_item_name),
-                    )
-                    conn.commit()
-                    conn.close()
-
-                    # ✨ Wipe out the stale memory state completely so tables and sliders sync
-                    if "cached_inventory" in st.session_state:
-                        del st.session_state.cached_inventory
-
-                    st.success(
-                        f"'{new_item_name}' was previously archived and has been safely reactivated!"
-                    )
-                    st.rerun()
-                else:
-                    database.adjust_inventory_stock_advanced(
-                        new_item_name, 0.0, initial_cost
-                    )
-                    import sqlite3
-
-                    conn = sqlite3.connect("herd_management.db")
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "UPDATE inventory SET is_active = 1 WHERE item_name = ?",
-                        (new_item_name,),
-                    )
-                    conn.commit()
-                    conn.close()
-
-                    # ✨ Wipe out the stale memory state completely so tables and sliders sync
-                    if "cached_inventory" in st.session_state:
-                        del st.session_state.cached_inventory
-
-                    st.success(
-                        f"'{new_item_name}' successfully registered at $ {initial_cost}/kg!"
-                    )
-                    st.rerun()
-
-    with tab_purchase:
-        st.markdown("### Log Warehouse Stock Movements")
-        with st.form("purchase_movement_form_clean"):
-            col1, col2 = st.columns(2)
-            with col1:
-                if active_item_options:
-                    chosen_stock_item = st.selectbox(
-                        "Select Target Feed Ingredient:",
-                        active_item_options,
-                        key="purch_select",
-                    )
-                else:
-                    st.warning(
-                        "No active ingredients available. Please register or reactivate items first."
-                    )
-                    chosen_stock_item = None
-
-                stock_shift = st.number_input(
-                    "Stock Volume Shift Value (+ Purchases, - Mix Drawdowns):",
-                    step=50.0,
-                    value=0.0,
-                )
-            with col2:
-                current_cost_val = 15.0
-                if chosen_stock_item and not df_active.empty:
-                    match_row = df_active[df_active["item_name"] == chosen_stock_item]
-                    if not match_row.empty:
-                        current_cost_val = float(match_row.iloc[0]["cost_per_kg"])
-
-                updated_cost = st.number_input(
-                    "Confirm/Update Unit Buying Cost ($/1 kg):",
-                    min_value=0.0,
-                    step=0.1,
-                    value=current_cost_val,
-                )
-
-            submit_purch = st.form_submit_button(
-                "Commit Movement Entry to Stock Ledger"
-            )
-            if submit_purch and chosen_stock_item:
-                database.adjust_inventory_stock_advanced(
-                    chosen_stock_item, stock_shift, updated_cost
-                )
-
-                # ✨ Wipe cache so stock and value updates reflect instantly across dashboards
-                if "cached_inventory" in st.session_state:
-                    del st.session_state.cached_inventory
-
-                st.success(
-                    f"Warehouse Ledger updated for '{chosen_stock_item}' (Shift: {stock_shift} kg)!"
-                )
-                st.rerun()
-
-    with tab_status:
-        st.markdown("### Change Ingredient Status Visibility")
-        st.info(
-            "Deactivating an item hides its slider from the formulation page, but leaves all historical data untouched."
-        )
-
-        col_deact, col_react = st.columns(2)
-
-        with col_deact:
-            st.markdown("#### ⏸️ Archive Unused Item")
-            with st.form("deactivate_form"):
-                if active_item_options:
-                    to_deactivate = st.selectbox(
-                        "Select Ingredient to Hide:",
-                        active_item_options,
-                        key="deact_box",
-                    )
-                    submit_deact = st.form_submit_button("Mark as Inactive / Archive")
-                    if submit_deact and to_deactivate:
-                        import sqlite3
-
-                        conn = sqlite3.connect("herd_management.db")
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            "UPDATE inventory SET is_active = 0 WHERE item_name = ?",
-                            (to_deactivate,),
+        with tab_register:
+                st.markdown("### Initial Item Setup")
+                with st.form("registration_form_clean"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        new_item_name = st.text_input(
+                            "Type Brand New Ingredient Name (e.g., Wheat, Radda):"
+                        ).strip()
+                    with col2:
+                        initial_cost = st.number_input(
+                            "Set Baseline Unit Cost per 1 kg ($):",
+                            min_value=0.0,
+                            step=0.1,
+                            value=15.0,
                         )
-                        conn.commit()
-                        conn.close()
 
-                        # ✨ Wipe cache so archived items disappear instantly from the slider row list
-                        if "cached_inventory" in st.session_state:
-                            del st.session_state.cached_inventory
-
-                        st.success(
-                            f"'{to_deactivate}' is now hidden from active formulation sliders."
-                        )
-                        st.rerun()
-                else:
-                    st.write("No active items to hide.")
-
-        with col_react:
-            st.markdown("#### ▶️ Reactivate Historical Item")
-            with st.form("reactivate_form"):
-                inactive_options = (
-                    df_inactive["item_name"].tolist() if not df_inactive.empty else []
-                )
-                if inactive_options:
-                    to_reactivate = st.selectbox(
-                        "Select Ingredient to Restore:",
-                        inactive_options,
-                        key="react_box",
+                    st.markdown(
+                        "<p style='color: #E6A23C; font-weight: bold;'>⚠️ Operational Notice: Registering or submitting here will clear the application data cache to refresh your sliders immediately.</p>",
+                        unsafe_allow_html=True,
                     )
-                    submit_react = st.form_submit_button("Restore to Active Duty")
-                    if submit_react and to_reactivate:
-                        import sqlite3
+                    submit_reg = st.form_submit_button("Register Ingredient with 0.0 kg Stock")
+                    if submit_reg:
+                        if not new_item_name:
+                            st.error("Validation Error: Ingredient name cannot be left blank.")
+                        elif new_item_name in all_item_options:
+                            import sqlite3
 
-                        conn = sqlite3.connect("herd_management.db")
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            "UPDATE inventory SET is_active = 1 WHERE item_name = ?",
-                            (to_reactivate,),
+                            conn = sqlite3.connect("herd_management.db")
+                            cursor = conn.cursor()
+                            cursor.execute(
+                                "UPDATE inventory SET is_active = 1, cost_per_kg = ? WHERE item_name = ?",
+                                (initial_cost, new_item_name),
+                            )
+                            conn.commit()
+                            conn.close()
+
+                            # ✨ Wipe out the stale memory state completely so tables and sliders sync
+                            if "cached_inventory" in st.session_state:
+                                del st.session_state.cached_inventory
+
+                            st.success(
+                                f"'{new_item_name}' was previously archived and has been safely reactivated!"
+                            )
+                            st.rerun()
+                        else:
+                            database.adjust_inventory_stock_advanced(
+                                new_item_name, 0.0, initial_cost
+                            )
+                            import sqlite3
+
+                            conn = sqlite3.connect("herd_management.db")
+                            cursor = conn.cursor()
+                            cursor.execute(
+                                "UPDATE inventory SET is_active = 1 WHERE item_name = ?",
+                                (new_item_name,),
+                            )
+                            conn.commit()
+                            conn.close()
+
+                            # ✨ Wipe out the stale memory state completely so tables and sliders sync
+                            if "cached_inventory" in st.session_state:
+                                del st.session_state.cached_inventory
+
+                            st.success(
+                                f"'{new_item_name}' successfully registered at $ {initial_cost}/kg!"
+                            )
+                            st.rerun()
+
+                with tab_purchase:
+                    st.markdown("### Log Warehouse Stock Movements")
+                    with st.form("purchase_movement_form_clean"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if active_item_options:
+                                chosen_stock_item = st.selectbox(
+                                    "Select Target Feed Ingredient:",
+                                    active_item_options,
+                                    key="purch_select",
+                                )
+                            else:
+                                st.warning(
+                                    "No active ingredients available. Please register or reactivate items first."
+                                )
+                                chosen_stock_item = None
+
+                            stock_shift = st.number_input(
+                                "Stock Volume Shift Value (+ Purchases, - Mix Drawdowns):",
+                                step=50.0,
+                                value=0.0,
+                            )
+                        with col2:
+                            current_cost_val = 15.0
+                            if chosen_stock_item and not df_active.empty:
+                                match_row = df_active[df_active["item_name"] == chosen_stock_item]
+                                if not match_row.empty:
+                                    current_cost_val = float(match_row.iloc[0]["cost_per_kg"])
+
+                            updated_cost = st.number_input(
+                                "Confirm/Update Unit Buying Cost ($/1 kg):",
+                                min_value=0.0,
+                                step=0.1,
+                                value=current_cost_val,
+                            )
+
+                        submit_purch = st.form_submit_button(
+                            "Commit Movement Entry to Stock Ledger"
                         )
-                        conn.commit()
-                        conn.close()
+                        if submit_purch and chosen_stock_item:
+                            database.adjust_inventory_stock_advanced(
+                                chosen_stock_item, stock_shift, updated_cost
+                            )
 
-                        # ✨ Wipe cache so reactivated items reappear instantly on sliders
-                        if "cached_inventory" in st.session_state:
-                            del st.session_state.cached_inventory
+                            # ✨ Wipe cache so stock and value updates reflect instantly across dashboards
+                            if "cached_inventory" in st.session_state:
+                                del st.session_state.cached_inventory
 
-                        st.success(
-                            f"'{to_reactivate}' has been restored to your active slider dashboard!"
-                        )
-                        st.rerun()
-                else:
-                    st.write("No archived items found.")
+                            st.success(
+                                f"Warehouse Ledger updated for '{chosen_stock_item}' (Shift: {stock_shift} kg)!"
+                            )
+                            st.rerun()
 
-    st.subheader("Active Feed Stock Valuation & Safety Parameters")
-    st.dataframe(raw_inv_df, use_container_width=True, hide_index=True)
+                with tab_status:
+                    st.markdown("### Change Ingredient Status Visibility")
+                    st.info(
+                        "Deactivating an item hides its slider from the formulation page, but leaves all historical data untouched."
+                    )
 
-# 🛠️ MODULE 6: DATA ENTRY CORRECTIONS PANEL
-elif menu == "Data Entry Corrections":
-    st.title("Data Entry Corrections & Direct SQL Ledger Overrides")
-    st.markdown("---")
+                    col_deact, col_react = st.columns(2)
+
+                    with col_deact:
+                        st.markdown("#### ⏸️ Archive Unused Item")
+                        with st.form("deactivate_form"):
+                            if active_item_options:
+                                to_deactivate = st.selectbox(
+                                    "Select Ingredient to Hide:",
+                                    active_item_options,
+                                    key="deact_box",
+                                )
+                                submit_deact = st.form_submit_button("Mark as Inactive / Archive")
+                                if submit_deact and to_deactivate:
+                                    import sqlite3
+
+                                    conn = sqlite3.connect("herd_management.db")
+                                    cursor = conn.cursor()
+                                    cursor.execute(
+                                        "UPDATE inventory SET is_active = 0 WHERE item_name = ?",
+                                        (to_deactivate,),
+                                    )
+                                    conn.commit()
+                                    conn.close()
+
+                                    # ✨ Wipe cache so archived items disappear instantly from the slider row list
+                                    if "cached_inventory" in st.session_state:
+                                        del st.session_state.cached_inventory
+
+                                    st.success(
+                                        f"'{to_deactivate}' is now hidden from active formulation sliders."
+                                    )
+                                    st.rerun()
+                            else:
+                                st.write("No active items to hide.")
+
+                    with col_react:
+                        st.markdown("#### ▶️ Reactivate Historical Item")
+                        with st.form("reactivate_form"):
+                            inactive_options = (
+                                df_inactive["item_name"].tolist() if not df_inactive.empty else []
+                            )
+                            if inactive_options:
+                                to_reactivate = st.selectbox(
+                                    "Select Ingredient to Restore:",
+                                    inactive_options,
+                                    key="react_box",
+                                )
+                                submit_react = st.form_submit_button("Restore to Active Duty")
+                                if submit_react and to_reactivate:
+                                    import sqlite3
+
+                                    conn = sqlite3.connect("herd_management.db")
+                                    cursor = conn.cursor()
+                                    cursor.execute(
+                                        "UPDATE inventory SET is_active = 1 WHERE item_name = ?",
+                                        (to_reactivate,),
+                                    )
+                                    conn.commit()
+                                    conn.close()
+
+                                    # ✨ Wipe cache so reactivated items reappear instantly on sliders
+                                    if "cached_inventory" in st.session_state:
+                                        del st.session_state.cached_inventory
+
+                                    st.success(
+                                        f"'{to_reactivate}' has been restored to your active slider dashboard!"
+                                    )
+                                    st.rerun()
+                            else:
+                                st.write("No archived items found.")
+
+                st.subheader("Active Feed Stock Valuation & Safety Parameters")
+                st.dataframe(raw_inv_df, use_container_width=True, hide_index=True)
+
+            # 🛠️ MODULE 6: DATA ENTRY CORRECTIONS PANEL
+        #elif menu == "Data Entry Corrections":
+        st.title("Data Entry Corrections & Direct SQL Ledger Overrides")
+        st.markdown("---")
