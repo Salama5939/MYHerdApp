@@ -276,114 +276,44 @@ elif menu == "Feed Inventory Controller":
     st.title("Warehouse Inventory & Blended Feed Recipe Calculators")
     st.markdown("---")
     st.subheader("🧪 Interactive Feed Recipe Cost Formulation Desks")
-    #==============================
-# This module is designed to allow you to adjust your feed ingredient ratios and see real-time 
-# cost implications based on your current inventory pricing. It also includes a comprehensive 
-# inventory management system to track stock levels, costs, and safety thresholds for each feed component. 
+
+    # 🚀 ISOLATED INITIALIZATION FOR FEED INVENTORY
 import sqlite3
 import pandas as pd
-import requests
-import os
 
-# --- ☁️ SUPABASE CLOUD SYNC CONFIGURATION ---
-SUPABASE_URL = "https://gvsocmhaarkierzeprgw.supabase.co"
-BUCKET_NAME = "feed-vault"
-DB_FILENAME = "feed_inventory.db"
+# 🚀 ISOLATED CONNECTION TO OUR DEDICATED LEDGER
+conn = sqlite3.connect("feed_inventory.db", timeout=20)
+cursor = conn.cursor()
 
-DOWNLOAD_URL = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{DB_FILENAME}"
-UPLOAD_URL = f"{SUPABASE_URL}/storage/v1/object/{BUCKET_NAME}/{DB_FILENAME}"
-
-# 🔑 AUTHENTICATION LAYER
-# This checks your Streamlit secrets ecosystem to securely write files to Supabase
-if "SUPABASE_KEY" in st.secrets:
-    SB_API_KEY = st.secrets["SUPABASE_KEY"]
-else:
-    SB_API_KEY = ""  # Fallback if running in a raw local terminal context
-
-
-# 🔄 HELPER FUNCTION: PUSH LOCAL DB TO SUPABASE VAULT
-def upload_db_to_supabase():
-    if os.path.exists(DB_FILENAME):
-        try:
-            with open(DB_FILENAME, "rb") as f:
-                response = requests.put(
-                    UPLOAD_URL,
-                    data=f,
-                    headers={
-                        "Authorization": f"Bearer {SB_API_KEY}",
-                        "Content-Type": "application/x-sqlite3",
-                    },
-                )
-            if response.status_code in [200, 201]:
-                st.toast(
-                    "🔒 Secure Cloud Backup: Database successfully synchronized to Supabase!",
-                    icon="✅",
-                )
-            else:
-                print(f"⚠️ Cloud Sync Notice: {response.text}")
-        except Exception as e:
-            print(f"Cloud upload error: {e}")
-
-
-# 🔄 INITIAL RUN: DOWNLOAD LIVE DATABASE ONCE ON STARTUP
-if "db_downloaded" not in st.session_state:
-    try:
-        res = requests.get(DOWNLOAD_URL)
-        if res.status_code == 200:
-            with open(DB_FILENAME, "wb") as f:
-                f.write(res.content)
-            st.session_state.db_downloaded = True
-        else:
-            st.session_state.db_downloaded = True
-    except Exception as download_err:
-        st.warning(
-            f"Could not reach Supabase storage. Using local sandbox mode. ({download_err})"
-        )
-
-# ⚡ AUTOMATIC TABLE INITIALIZATION ENGINE
-try:
-    conn = sqlite3.connect(DB_FILENAME, timeout=20)
-    cursor = conn.cursor()
-
-    # 1. Guarantee Core Inventory Table Exists
-    cursor.execute("""
+cursor.execute("""
         CREATE TABLE IF NOT EXISTS inventory (
             item_name TEXT PRIMARY KEY,
             quantity_kg REAL DEFAULT 0.0,
-            reorder_level_kg REAL DEFAULT 100.0,
+            reorder_level_kg REAL DEFAULT 0.0,
             cost_per_kg REAL DEFAULT 15.0,
             is_active INTEGER DEFAULT 1
-        );
+        )
     """)
-
-    # 2. Guarantee Recipe Formulation History Table Exists
-    cursor.execute("""
+cursor.execute("""
         CREATE TABLE IF NOT EXISTS feed_recipes (
             recipe_type TEXT PRIMARY KEY,
             calculated_mix_cost_per_kg REAL DEFAULT 0.0,
             recipe_breakdown TEXT DEFAULT ''
-        );
+        )
     """)
-    conn.commit()
-    conn.close()
-except Exception as db_init_err:
-    st.error(f"Critical Database Initialization Error: {db_init_err}")
+conn.commit()
+conn.close()
 
-# ⚡ DIRECT EXTRACTION LAYER (Keeps sliders and dashboards in fast memory sync)
+# ⚡ DIRECT EXTRACTION (Bypasses external hardcoded fallback functions completely)
 if "cached_inventory" not in st.session_state:
-    conn = sqlite3.connect(DB_FILENAME, timeout=20)
-    st.session_state.cached_inventory = pd.read_sql_query(
-        "SELECT * FROM inventory", conn
-    )
-    conn.close()
+        conn = sqlite3.connect("feed_inventory.db", timeout=20)
+        st.session_state.cached_inventory = pd.read_sql_query("SELECT * FROM inventory", conn)
+        conn.close()
 
 if "cached_recipes" not in st.session_state:
-    conn = sqlite3.connect(DB_FILENAME, timeout=20)
-    st.session_state.cached_recipes = pd.read_sql_query(
-        "SELECT * FROM feed_recipes", conn
-    )
-    conn.close()
-#=============================================================================
+        conn = sqlite3.connect("feed_inventory.db", timeout=20)
+        st.session_state.cached_recipes = pd.read_sql_query("SELECT * FROM feed_recipes", conn)
+        conn.close()
 
 # Assign live data frames from our clean session memory cache
 df_inv = st.session_state.cached_inventory
