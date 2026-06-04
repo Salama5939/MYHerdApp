@@ -598,16 +598,23 @@ else:
                             )
                             st.rerun()
 
-                with tab_purchase:
-                    st.markdown("### Log Warehouse Stock Movements")
-                with st.form("purchase_movement_form_clean"):
-                    col1, col2 = st.columns(2)
+    # Ensure variables exist before rendering tabs to prevent undefined reference errors
+        if 'active_item_options' not in locals():
+            active_item_options = df_active["item_name"].tolist() if not df_active.empty else []
+        if 'df_inactive' not in locals():
+            df_inactive = df_inv[df_inv["is_active"] == 0] if "is_active" in df_inv.columns else pd.DataFrame()
+
+    # --- TAB MANAGEMENT: RE-ALIGNED AND ISOLATED ---
+        with tab_purchase:
+            st.markdown("### Log Warehouse Stock Movements")
+            with st.form(key="purchase_movement_form_isolated"):
+                col1, col2 = st.columns(2)
                 with col1:
                     if active_item_options:
                         chosen_stock_item = st.selectbox(
                             "Select Target Feed Ingredient:",
                             active_item_options,
-                            key="purch_select",
+                            key="purch_select_isolated",
                         )
                     else:
                         st.warning("No active ingredients available. Please register or reactivate items first.")
@@ -617,6 +624,7 @@ else:
                         "Stock Volume Shift Value (+ Purchases, - Mix Drawdowns):",
                         step=50.0,
                         value=0.0,
+                        key="stock_shift_input"
                     )
                 with col2:
                     current_cost_val = 15.0
@@ -630,11 +638,11 @@ else:
                         min_value=0.0,
                         step=0.1,
                         value=current_cost_val,
+                        key="updated_cost_input"
                     )
 
                 submit_purch = st.form_submit_button("Commit Movement Entry to Stock Ledger")
                 if submit_purch and chosen_stock_item:
-                    # Direct update to the isolated database file
                     import sqlite3
                     conn = sqlite3.connect("feed_inventory.db", timeout=20)
                     cursor = conn.cursor()
@@ -646,7 +654,6 @@ else:
                     conn.commit()
                     conn.close()
 
-                    # Wipe session state cache to force immediate data sync on reload
                     if "cached_inventory" in st.session_state:
                         del st.session_state.cached_inventory
 
@@ -661,12 +668,12 @@ else:
 
             with col_deact:
                 st.markdown("#### ⏸️ Archive Unused Item")
-                with st.form("deactivate_form"):
+                with st.form(key="deactivate_form_isolated"):
                     if active_item_options:
                         to_deactivate = st.selectbox(
                             "Select Ingredient to Hide:",
                             active_item_options,
-                            key="deact_box",
+                            key="deact_box_isolated",
                         )
                         submit_deact = st.form_submit_button("Mark as Inactive / Archive")
                         if submit_deact and to_deactivate:
@@ -687,13 +694,13 @@ else:
 
             with col_react:
                 st.markdown("#### ▶️ Reactivate Historical Item")
-                with st.form("reactivate_form"):
+                with st.form(key="reactivate_form_isolated"):
                     inactive_options = df_inactive["item_name"].tolist() if not df_inactive.empty else []
                     if inactive_options:
                         to_reactivate = st.selectbox(
                             "Select Ingredient to Restore:",
                             inactive_options,
-                            key="react_box",
+                            key="react_box_isolated",
                         )
                         submit_react = st.form_submit_button("Restore to Active Duty")
                         if submit_react and to_reactivate:
@@ -712,13 +719,12 @@ else:
                     else:
                         st.write("No archived items found.")
 
-        # 📊 THE CRUCIAL LINK: Force the table to render exclusively what is inside df_inv!
+        # --- DATAFRAME RENDERING: SYNCED EXCLUSIVELY WITH ISOLATED DB ---
         st.subheader("Active Feed Stock Valuation & Safety Parameters")
         if not df_inv.empty:
             st.dataframe(df_inv, use_container_width=True, hide_index=True)
         else:
-            st.info("No active records to display in the main inventory ledger.")
-                # 🛠️ MODULE 6: DATA ENTRY CORRECTIONS PANEL
+            st.info("No active records to display in the main inventory ledger.")                # 🛠️ MODULE 6: DATA ENTRY CORRECTIONS PANEL
             #elif menu == "Data Entry Corrections":
             #st.title("Data Entry Corrections & Direct SQL Ledger Overrides")
             #st.markdown("---")
