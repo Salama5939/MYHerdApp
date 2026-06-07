@@ -2,8 +2,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-# import database
-import database as db  # Connects directly to your database.py file
+import database
 from datetime import datetime, date
 import sqlite3
 import requests
@@ -13,67 +12,7 @@ import os
 st.set_page_config(page_title="myHerdApp Engine", layout="wide", page_icon="🐑")
 
 # Initialize SQLite structures matching active configurations
-db.initialize_db()
-
-# ==============================================================================
-# 🔐 MULTI-USER ACCESS GATEWAY (Cloud Supabase Integration)
-# ==============================================================================
-
-# Initialize state flags for user session tracking if not already set
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
-if "username" not in st.session_state:
-    st.session_state["username"] = ""
-if "user_role" not in st.session_state:
-    st.session_state["user_role"] = "Operator"
-
-# Render the Login Panel if the user is not signed in
-if not st.session_state["authenticated"]:
-    st.title("🔐 Secure Herd Engine Sign-In")
-    st.write("Access to warehouse desks requires authorized database credentials.")
-
-    with st.form("login_form"):
-        username_input = st.text_input("Username").strip().lower()
-        password_input = st.text_input("Password", type="password")
-        submit_login = st.form_submit_button("Log In")
-
-        if submit_login:
-            # Query our cloud user table through the database.py handler
-            user_record = db.verify_user_login(username_input, password_input)
-
-            if user_record:
-                st.session_state["authenticated"] = True
-                st.session_state["username"] = user_record[0]
-                st.session_state["user_role"] = user_record[1]
-
-                # Write an audit entry to Supabase tracking this specific login action
-                db.log_system_activity(
-                    username=user_record[0],
-                    action_type="LOGIN",
-                    target_table="app_users",
-                    record_identifier=user_record[0],
-                    context_details="User successfully authenticated via application interface.",
-                )
-                st.success("Access Granted! Synchronizing database panels...")
-                st.rerun()
-            else:
-                st.error("❌ Invalid Username or Password. Please try again.")
-
-    st.stop()  # Halt execution right here so no farm calculators load behind the gate
-
-# ==============================================================================
-# 🐑 ACTIVE FARM DASHBOARD (Accessible only after valid login)
-# ==============================================================================
-
-# Display current user metadata and a logout trigger at the top of your sidebar
-st.sidebar.markdown(
-    f"**Active User:** `{st.session_state['username']}` ({st.session_state['user_role']})"
-)
-if st.sidebar.button("🔒 Secure Sign-Out"):
-    st.session_state["authenticated"] = False
-    st.session_state["username"] = ""
-    st.rerun()
-
+database.initialize_db()
 
 # Navigation Sidebar Setup
 st.sidebar.title("🐑 myHerdApp Control Room")
@@ -91,9 +30,9 @@ menu = st.sidebar.radio(
 )
 
 # Fetch Shared Base Application Metrics
-df_herd = db.get_table_data("herd")
-df_births = db.get_table_data("birth_records")
-df_weights = db.get_table_data("weight_logs")
+df_herd = database.get_table_data("herd")
+df_births = database.get_table_data("birth_records")
+df_weights = database.get_table_data("weight_logs")
 
 # 📊 MODULE 1: STRATEGIC PERFORMANCE METRICS
 if menu == "Strategic Performance Metrics":
@@ -105,37 +44,24 @@ if menu == "Strategic Performance Metrics":
             "The active herd data ledger account is currently empty. Begin registering animals to see live summaries."
         )
     else:
-        active_animals = df_herd[df_herd["status"] == "Active/Healthy"]
+        active_animals = df_herd[df_herd["status"] == "Active"]
 
-        # Upper KPI Metrics Row (Expanded to 7 columns for a complete category breakdown)
-        m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
-        m1.metric("Total Active Herd", len(active_animals))
+        # Upper KPI Metrics Row
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total Active Animals Registered", len(active_animals))
+        m2.metric(
+            "Ewes Population Group",
+            len(active_animals[active_animals["category"] == "Ewe"]),
+        )
+        m3.metric(
+            "Lambs Population Group",
+            len(active_animals[active_animals["category"] == "Lamb"]),
+        )
 
-        # 1. Mature Ewes
-        ewes_count = len(active_animals[active_animals["category"] == "Ewes"])
-        m2.metric("Ewes Count", ewes_count)
-
-        # 2. Pregnant Ewes
-        pregnant_count = len(active_animals[active_animals["category"] == "Pregnant"])
-        m3.metric("Pregnant Count", pregnant_count)
-
-        # 3. Fattening Stock
-        fattening_count = len(active_animals[active_animals["category"] == "Fattening"])
-        m4.metric("Fattening Count", fattening_count)
-
-        # 4. Small Sheep - Female
-        small_female_count = len(active_animals[active_animals["category"] == "Small Sheep - Female"])
-        m5.metric("Small - Female", small_female_count)
-
-        # 5. Small Sheep - Male
-        small_male_count = len(active_animals[active_animals["category"] == "Small Sheep - Male"])
-        m6.metric("Small - Male", small_male_count)
-
-        # 6. Total Lambings Logs Count
         total_lambs_born = (
             int(df_births["lambs_count"].sum()) if not df_births.empty else 0
         )
-        m7.metric("Total Lambings", total_lambs_born)
+        m4.metric("Total Successful Lambings Logs", total_lambs_born)
 
         # Categorical Charts Section
         st.markdown("### 📈 Structural Population Breakdowns")
@@ -146,26 +72,19 @@ if menu == "Strategic Performance Metrics":
                 cat_counts,
                 x="category",
                 y="count",
-                color="category",  # <--- This adds the distinct color coding!
                 title="Herd Structure Classification Count",
-                labels={"count": "Head Count", "category": "Classification"},
+                labels={"count": "Head Count"},
             )
             st.plotly_chart(fig_cat, use_container_width=True)
-
         with c2:
-            # Calculate category counts specifically for active animals
-            cat_pie_counts = active_animals["category"].value_counts().reset_index()
-
+            status_counts = df_herd["status"].value_counts().reset_index()
             fig_stat = px.pie(
-                cat_pie_counts,
-                names="category",
+                status_counts,
+                names="status",
                 values="count",
-                title="Herd Category Allocation Ratio",
-                hole=0.3,  # Converts it to a clean modern donut style chart
+                title="Historical Status Allocation Ratio",
             )
-            # This line explicitly forces percentages and labels to appear on the slices
-            fig_stat.update_traces(textinfo="percent+label")
-            st.plotly_chart(fig_stat, use_container_width=True)            
+            st.plotly_chart(fig_stat, use_container_width=True)
 
 # 📝 MODULE 2: ACTIVE HERD REGISTRY
 elif menu == "Active Herd Registry":
@@ -181,12 +100,11 @@ elif menu == "Active Herd Registry":
             with col1:
                 tag_no = st.text_input("RFID Ear Tag Code (Unique ID):").strip()
                 category = st.selectbox(
-                    "Herd Category Classification:",
-                    ["Fattening", "Ewes", "Pregnant", "Small - Female", "Small - Male"],
+                    "Herd Category Classification:", ["Ewe", "Lamb", "Ram", "Yearling"]
                 )
                 status = st.selectbox(
                     "Current Operational Status Level:",
-                    ["Active/Healthy", "Sold", "Slaughtered", "Died"],
+                    ["Active", "Sold", "Slaughtered", "Died"],
                 )
             with col2:
                 birth_date = st.date_input(
@@ -213,7 +131,7 @@ elif menu == "Active Herd Registry":
                         f"Duplicate Row Exception: Tag '{tag_no}' already exists in the local database records."
                     )
                 else:
-                    db.add_animal(
+                    database.add_animal(
                         tag_no,
                         category,
                         status,
@@ -230,7 +148,7 @@ elif menu == "Active Herd Registry":
         if df_herd.empty:
             st.warning("No records found in database to modify.")
         else:
-            active_list = df_herd[df_herd["status"] == "Active/Healthy"]["tag_no"].tolist()
+            active_list = df_herd[df_herd["status"] == "Active"]["tag_no"].tolist()
             if not active_list:
                 st.info(
                     "No active animals are currently present in your herd ledger registry."
@@ -258,7 +176,7 @@ elif menu == "Active Herd Registry":
                         "Execute Change Status Command"
                     )
                     if submit_action:
-                        db.sell_or_slaughter_animal(
+                        database.sell_or_slaughter_animal(
                             target_tag,
                             target_action,
                             sale_price,
@@ -279,27 +197,9 @@ elif menu == "Birth Event Records":
 
     with st.form("birth_event_form", clear_on_submit=True):
         st.subheader("Log Successful Lambing Event Occurrence")
-
-        # Pull eligible mothers from the active herd ledger who are currently "Pregnant"
-        pregnant_ewes = df_herd[
-            (df_herd["status"] == "Active/Healthy")
-            & (df_herd["category"] == "Pregnant")
-        ]["tag_no"].tolist()
-
         col1, col2 = st.columns(2)
         with col1:
-            if pregnant_ewes:
-                ewe_tag = st.selectbox(
-                    "Dam Ewe Ear Tag Code (Mother ID):", pregnant_ewes
-                )
-            else:
-                st.warning(
-                    "⚠️ No active animals are currently classified as 'Pregnant' in the registry."
-                )
-                ewe_tag = st.text_input(
-                    "Dam Ewe Ear Tag Code (Mother ID) - Manual Entry:"
-                ).strip()
-
+            ewe_tag = st.text_input("Dam Ewe Ear Tag Code (Mother ID):").strip()
             lambs_count = st.number_input(
                 "Count of Born Lambs (Headcount):",
                 min_value=1,
@@ -307,12 +207,6 @@ elif menu == "Birth Event Records":
                 value=1,
                 step=1,
             )
-
-            # ✨ Fixed short classification names to match your dashboard metrics perfectly
-            newborn_category = st.selectbox(
-                "Newborn Classification:", ["Small - Female", "Small - Male"]
-            )
-
         with col2:
             birth_date = st.date_input("Event Date (Calendar):", value=date.today())
             foster_ewe = st.text_input("Foster Ewe Tag Code (Optional):").strip()
@@ -327,16 +221,8 @@ elif menu == "Birth Event Records":
                 )
             else:
                 foster_val = foster_ewe if foster_ewe else None
-
-                # Combine newborn category directly into comments tracking context
-                full_comments = f"[{newborn_category}] {comments}".strip()
-
-                db.register_birth_event(
-                    ewe_tag,
-                    str(birth_date),
-                    int(lambs_count),
-                    foster_val,
-                    full_comments,
+                database.register_birth_event(
+                    ewe_tag, str(birth_date), int(lambs_count), foster_val, comments
                 )
                 st.success("Lambing event logs processed successfully.")
                 st.rerun()
@@ -378,7 +264,7 @@ elif menu == "Growth Performance Logs":
                     "Validation Error: Animal Target Ear Tag Code cannot be empty."
                 )
             else:
-                db.log_growth_metrics_advanced(
+                database.log_growth_metrics_advanced(
                     tag_no, weight, feed_kg, str(weigh_date), comments
                 )
                 st.success("Growth performance milestone logs adjusted successfully.")
@@ -392,15 +278,13 @@ elif menu == "Feed Inventory Controller":
     st.title("Warehouse Inventory & Blended Feed Recipe Calculators")
     st.markdown("---")
     st.subheader("🧪 Interactive Feed Recipe Cost Formulation Desks")
-
+    
     # --- ☁️ SUPABASE CLOUD SYNC CONFIGURATION ---
     SUPABASE_URL = "https://gvsocmhaarkierzeprgw.supabase.co"
     BUCKET_NAME = "feed-vault"
     DB_FILENAME = "feed_inventory.db"
 
-    DOWNLOAD_URL = (
-        f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{DB_FILENAME}"
-    )
+    DOWNLOAD_URL = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{DB_FILENAME}"
     UPLOAD_URL = f"{SUPABASE_URL}/storage/v1/object/{BUCKET_NAME}/{DB_FILENAME}"
 
     # 🔑 AUTHENTICATION LAYER
@@ -443,15 +327,13 @@ elif menu == "Feed Inventory Controller":
             else:
                 st.session_state.db_downloaded = True
         except Exception as download_err:
-            st.warning(
-                f"Could not reach Supabase storage. Using local sandbox mode. ({download_err})"
-            )
+            st.warning(f"Could not reach Supabase storage. Using local sandbox mode. ({download_err})")
 
     # ⚡ AUTOMATIC TABLE INITIALIZATION ENGINE
     try:
         conn = sqlite3.connect(DB_FILENAME, timeout=20)
         cursor = conn.cursor()
-
+        
         # 1. Guarantee Core Inventory Table Exists
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS inventory (
@@ -462,7 +344,7 @@ elif menu == "Feed Inventory Controller":
                 is_active INTEGER DEFAULT 1
             );
         """)
-
+        
         # 2. Guarantee Recipe Formulation History Table Exists
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS feed_recipes (
@@ -479,16 +361,12 @@ elif menu == "Feed Inventory Controller":
     # ⚡ DIRECT EXTRACTION LAYER (Keeps sliders and dashboards in fast memory sync)
     if "cached_inventory" not in st.session_state:
         conn = sqlite3.connect(DB_FILENAME, timeout=20)
-        st.session_state.cached_inventory = pd.read_sql_query(
-            "SELECT * FROM inventory", conn
-        )
+        st.session_state.cached_inventory = pd.read_sql_query("SELECT * FROM inventory", conn)
         conn.close()
-
+        
     if "cached_recipes" not in st.session_state:
         conn = sqlite3.connect(DB_FILENAME, timeout=20)
-        st.session_state.cached_recipes = pd.read_sql_query(
-            "SELECT * FROM feed_recipes", conn
-        )
+        st.session_state.cached_recipes = pd.read_sql_query("SELECT * FROM feed_recipes", conn)
         conn.close()
 
     # Assign live data frames from our clean session memory cache
@@ -500,14 +378,12 @@ elif menu == "Feed Inventory Controller":
         conn = sqlite3.connect("feed_inventory.db", timeout=20)
         cursor = conn.cursor()
         try:
-            cursor.execute(
-                "ALTER TABLE feed_recipes ADD COLUMN recipe_breakdown TEXT DEFAULT ''"
-            )
+            cursor.execute("ALTER TABLE feed_recipes ADD COLUMN recipe_breakdown TEXT DEFAULT ''")
             conn.commit()
         except Exception:
             pass
         conn.close()
-
+        
         conn = sqlite3.connect("feed_inventory.db", timeout=20)
         df_recipes = pd.read_sql_query("SELECT * FROM feed_recipes", conn)
         conn.close()
@@ -517,14 +393,12 @@ elif menu == "Feed Inventory Controller":
         conn = sqlite3.connect("feed_inventory.db", timeout=20)
         cursor = conn.cursor()
         try:
-            cursor.execute(
-                "ALTER TABLE inventory ADD COLUMN is_active INTEGER DEFAULT 1"
-            )
+            cursor.execute("ALTER TABLE inventory ADD COLUMN is_active INTEGER DEFAULT 1")
             conn.commit()
         except Exception:
             pass
         conn.close()
-
+        
         conn = sqlite3.connect("feed_inventory.db", timeout=20)
         df_inv = pd.read_sql_query("SELECT * FROM inventory", conn)
         conn.close()
@@ -532,32 +406,19 @@ elif menu == "Feed Inventory Controller":
 
     # --- SETUP LIVE RENDER OBJECTS ---
     raw_inv_df = df_inv.copy()
-    df_inactive = (
-        df_inv[df_inv["is_active"] == 0]
-        if "is_active" in df_inv.columns
-        else pd.DataFrame()
-    )
-    df_active = (
-        df_inv[df_inv["is_active"] == 1] if "is_active" in df_inv.columns else df_inv
-    )
+    df_inactive = df_inv[df_inv["is_active"] == 0] if "is_active" in df_inv.columns else pd.DataFrame()
+    df_active = df_inv[df_inv["is_active"] == 1] if "is_active" in df_inv.columns else df_inv
     active_item_options = df_active["item_name"].tolist() if not df_active.empty else []
 
     if df_inv.empty:
-        st.warning(
-            "⚠️ Feed stock database is currently empty. Please type an item name below to register your first commodity record!"
-        )
+        st.warning("⚠️ Feed stock database is currently empty. Please type an item name below to register your first commodity record!")
         df_active_sliders = pd.DataFrame()
     else:
         df_active_sliders = df_active
 
     # Create ingredient price map dynamically from user database
-    price_lookup = {
-        row["item_name"]: float(row["cost_per_kg"])
-        for _, row in df_active_sliders.iterrows()
-    }
-    cost_summary = " | ".join(
-        [f"{name}: **${cost}/kg**" for name, cost in price_lookup.items()]
-    )
+    price_lookup = {row["item_name"]: float(row["cost_per_kg"]) for _, row in df_active_sliders.iterrows()}
+    cost_summary = " | ".join([f"{name}: **${cost}/kg**" for name, cost in price_lookup.items()])
     st.markdown(f"**Current Ingredient Costs:** {cost_summary}")
 
     # Helper function to decode values stored in the breakdown column
@@ -604,19 +465,13 @@ elif menu == "Feed Inventory Controller":
             (ratios_fattening[name] / 100.0) * price_lookup[name]
             for name in ratios_fattening
         )
-        st.info(
-            f"**Calculated Blended Fattening Feed Cost:** $ {blend_cost_fattening:.2f} per kg"
-        )
+        st.info(f"**Calculated Blended Fattening Feed Cost:** $ {blend_cost_fattening:.2f} per kg")
 
-        if st.button(
-            "Save Fattening Blend Specification Parameters", key="save_fattening_btn"
-        ):
+        if st.button("Save Fattening Blend Specification Parameters", key="save_fattening_btn"):
             if total_fattening != 100:
                 st.error("Ratios must sum to exactly 100% before saving.")
             else:
-                breakdown_str = ";".join(
-                    [f"{k}:{v}" for k, v in ratios_fattening.items()]
-                )
+                breakdown_str = ";".join([f"{k}:{v}" for k, v in ratios_fattening.items()])
                 conn = sqlite3.connect("herd_management.db", timeout=20)
                 cursor = conn.cursor()
                 cursor.execute(
@@ -626,9 +481,7 @@ elif menu == "Feed Inventory Controller":
                 conn.commit()
                 conn.close()
 
-                st.session_state.cached_recipes = db.get_table_data(
-                    "feed_recipes"
-                )
+                st.session_state.cached_recipes = database.get_table_data("feed_recipes")
                 st.success("Fattening feed parameters committed successfully!")
                 st.rerun()
 
@@ -654,19 +507,13 @@ elif menu == "Feed Inventory Controller":
             (ratios_general[name] / 100.0) * price_lookup[name]
             for name in ratios_general
         )
-        st.info(
-            f"**Calculated Blended General Feed Cost:** $ {blend_cost_general:.2f} per kg"
-        )
+        st.info(f"**Calculated Blended General Feed Cost:** $ {blend_cost_general:.2f} per kg")
 
-        if st.button(
-            "Save General Herd Blend Specification Parameters", key="save_general_btn"
-        ):
+        if st.button("Save General Herd Blend Specification Parameters", key="save_general_btn"):
             if total_general != 100:
                 st.error("Ratios must sum to exactly 100% before saving.")
             else:
-                breakdown_str = ";".join(
-                    [f"{k}:{v}" for k, v in ratios_general.items()]
-                )
+                breakdown_str = ";".join([f"{k}:{v}" for k, v in ratios_general.items()])
                 conn = sqlite3.connect("herd_management.db", timeout=20)
                 cursor = conn.cursor()
                 cursor.execute(
@@ -676,9 +523,7 @@ elif menu == "Feed Inventory Controller":
                 conn.commit()
                 conn.close()
 
-                st.session_state.cached_recipes = db.get_table_data(
-                    "feed_recipes"
-                )
+                st.session_state.cached_recipes = database.get_table_data("feed_recipes")
                 st.success("General Herd feed parameters committed successfully!")
                 st.rerun()
 
@@ -686,7 +531,7 @@ elif menu == "Feed Inventory Controller":
     st.markdown("---")
     st.subheader("📦 Warehouse Inventory Control Desk")
 
-    raw_inv_df = db.get_table_data("inventory")
+    raw_inv_df = database.get_table_data("inventory")
     if not raw_inv_df.empty and "is_active" in raw_inv_df.columns:
         df_active = raw_inv_df[raw_inv_df["is_active"] == 1]
         df_inactive = raw_inv_df[raw_inv_df["is_active"] == 0]
@@ -716,31 +561,21 @@ elif menu == "Feed Inventory Controller":
                 key="new_item_cost_input",
             )
 
-        st.caption(
-            "⚠️ **Operational Notice:** Registering or submitting here will clear the application data cache to refresh your sliders immediately."
-        )
-        submit_registration = st.form_submit_button(
-            "Register Ingredient with 0.0 kg Stock"
-        )
+        st.caption("⚠️ **Operational Notice:** Registering or submitting here will clear the application data cache to refresh your sliders immediately.")
+        submit_registration = st.form_submit_button("Register Ingredient with 0.0 kg Stock")
 
         if submit_registration:
             clean_name = new_item_name.strip()
             if clean_name == "":
-                st.error(
-                    "❌ Registration failed: Ingredient name cannot be left empty."
-                )
+                st.error("❌ Registration failed: Ingredient name cannot be left empty.")
             else:
                 conn = sqlite3.connect("feed_inventory.db", timeout=20)
                 cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT 1 FROM inventory WHERE item_name = ?", (clean_name,)
-                )
+                cursor.execute("SELECT 1 FROM inventory WHERE item_name = ?", (clean_name,))
                 exists = cursor.fetchone()
 
                 if exists:
-                    st.warning(
-                        f"ℹ️ '{clean_name}' already exists in your active inventory catalog."
-                    )
+                    st.warning(f"ℹ️ '{clean_name}' already exists in your active inventory catalog.")
                     conn.close()
                 else:
                     try:
@@ -757,9 +592,7 @@ elif menu == "Feed Inventory Controller":
                         if "cached_inventory" in st.session_state:
                             del st.session_state.cached_inventory
 
-                        st.success(
-                            f"🎉 Success! '{clean_name}' has been safely registered into your isolated feed stock ledger."
-                        )
+                        st.success(f"🎉 Success! '{clean_name}' has been safely registered into your isolated feed stock ledger.")
                         st.rerun()
                     except Exception as e:
                         conn.close()
@@ -767,15 +600,9 @@ elif menu == "Feed Inventory Controller":
 
     # Ensure variables exist before rendering tabs
     if "active_item_options" not in locals():
-        active_item_options = (
-            df_active["item_name"].tolist() if not df_active.empty else []
-        )
+        active_item_options = df_active["item_name"].tolist() if not df_active.empty else []
     if "df_inactive" not in locals():
-        df_inactive = (
-            df_inv[df_inv["is_active"] == 0]
-            if "is_active" in df_inv.columns
-            else pd.DataFrame()
-        )
+        df_inactive = df_inv[df_inv["is_active"] == 0] if "is_active" in df_inv.columns else pd.DataFrame()
 
     # --- UPDATED TAB MANAGEMENT W/ MODIFY & DELETE ---
     tab_purchase, tab_modify, tab_status, tab_delete = st.tabs(
@@ -799,9 +626,7 @@ elif menu == "Feed Inventory Controller":
                         key="purch_select_isolated",
                     )
                 else:
-                    st.warning(
-                        "No active ingredients available. Please register or reactivate items first."
-                    )
+                    st.warning("No active ingredients available. Please register or reactivate items first.")
                     chosen_stock_item = None
 
                 stock_shift = st.number_input(
@@ -825,9 +650,7 @@ elif menu == "Feed Inventory Controller":
                     key="updated_cost_input",
                 )
 
-            submit_purch = st.form_submit_button(
-                "Commit Movement Entry to Stock Ledger"
-            )
+            submit_purch = st.form_submit_button("Commit Movement Entry to Stock Ledger")
             if submit_purch and chosen_stock_item:
                 conn = sqlite3.connect("feed_inventory.db", timeout=20)
                 cursor = conn.cursor()
@@ -838,25 +661,25 @@ elif menu == "Feed Inventory Controller":
                     SET quantity_kg = quantity_kg + ?, cost_per_kg = ? 
                     WHERE item_name = ?
                     """,
-                    (stock_shift, updated_cost, chosen_stock_item),
-                )
+                        (stock_shift, updated_cost, chosen_stock_item),
+                    )
                 conn.commit()
                 conn.close()
 
                 if "cached_inventory" in st.session_state:
-                    del st.session_state.cached_inventory
+                        del st.session_state.cached_inventory
 
                 st.success(
-                    f"Warehouse Ledger updated for '{chosen_stock_item}' (Shift: {stock_shift} kg)!"
-                )
+                        f"Warehouse Ledger updated for '{chosen_stock_item}' (Shift: {stock_shift} kg)!"
+                    )
                 st.rerun()
 
         with tab_modify:
             st.markdown("### Update Existing Commodity Configurations")
-            # =====================================
+            #=====================================
             with tab_modify:
                 st.markdown("### Update Existing Commodity Configurations")
-
+            
             # 1. Keep the dropdown OUTSIDE the form so it triggers an instant update when changed
             if active_item_options:
                 target_modify_item = st.selectbox(
@@ -879,26 +702,23 @@ elif menu == "Feed Inventory Controller":
                     mod_col1, mod_col2, mod_col3 = st.columns(3)
                     with mod_col1:
                         new_qty = st.number_input(
-                            "Direct Inventory Adjustment (kg):",
-                            value=current_q,
-                            step=10.0,
+                            "Direct Inventory Adjustment (kg):", value=current_q, step=10.0
                         )
                     with mod_col2:
                         new_reorder = st.number_input(
                             "Safety Reorder Threshold Alert level (kg):",
                             value=current_r,
                             step=10.0,
-                        )
+                            )
                     with mod_col3:
                         new_price = st.number_input(
                             "Unit Value Cost per kg ($):", value=current_c, step=0.1
                         )
 
                     submit_mod = st.form_submit_button("Save Altered Record Parameters")
-
+                    
                     if submit_mod and target_modify_item:
                         import sqlite3
-
                         conn = sqlite3.connect("feed_inventory.db", timeout=20)
                         cursor = conn.cursor()
                         cursor.execute(
@@ -920,7 +740,7 @@ elif menu == "Feed Inventory Controller":
                         st.rerun()
             else:
                 st.info("No active materials available to edit.")
-                # ==========================================
+                    #==========================================
 
         with tab_status:
             st.markdown("### Change Ingredient Status Visibility")
@@ -938,9 +758,7 @@ elif menu == "Feed Inventory Controller":
                             active_item_options,
                             key="deact_box_isolated",
                         )
-                        submit_deact = st.form_submit_button(
-                            "Mark as Inactive / Archive"
-                        )
+                        submit_deact = st.form_submit_button("Mark as Inactive / Archive")
                         if submit_deact and to_deactivate:
                             import sqlite3
 
@@ -967,9 +785,7 @@ elif menu == "Feed Inventory Controller":
                 st.markdown("#### ▶️ Reactivate Historical Item")
                 with st.form(key="reactivate_form_isolated"):
                     inactive_options = (
-                        df_inactive["item_name"].tolist()
-                        if not df_inactive.empty
-                        else []
+                        df_inactive["item_name"].tolist() if not df_inactive.empty else []
                     )
                     if inactive_options:
                         to_reactivate = st.selectbox(
@@ -1007,9 +823,7 @@ elif menu == "Feed Inventory Controller":
             )
 
             # Combine active and inactive items so the user can wipe anything from existence
-            all_deletable_items = (
-                df_inv["item_name"].tolist() if not df_inv.empty else []
-            )
+            all_deletable_items = df_inv["item_name"].tolist() if not df_inv.empty else []
 
             with st.form(key="hard_delete_form"):
                 if all_deletable_items:

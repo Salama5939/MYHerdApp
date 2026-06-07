@@ -246,3 +246,53 @@ def save_feed_recipe_advanced(recipe_type, breakdown_string, calculated_cost):
 
     conn.commit()
     conn.close()
+
+import psycopg2
+import streamlit as st
+
+
+def get_supabase_connection():
+    """Establishes a direct, secure connection to the cloud Supabase PostgreSQL database."""
+    conn_str = st.secrets["CONNECTION_STRING"]
+    return psycopg2.connect(conn_str)
+
+
+def verify_user_login(username, password):
+    """Checks the cloud app_users table to validate login credentials."""
+    try:
+        conn = get_supabase_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT username, user_role FROM app_users WHERE username = %s AND password_hash = %s AND is_active = True;",
+            (username, password),
+        )
+        user = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+        return user  # Returns (username, role) if found, or None if incorrect
+    except Exception as e:
+        st.error(f"Database connection error: {e}")
+        return None
+
+
+def log_system_activity(
+    username, action_type, target_table, record_identifier, context_details
+):
+    """Automatically writes a security track log line to the online system_audit_logs table."""
+    try:
+        conn = get_supabase_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """INSERT INTO system_audit_logs (username, action_type, target_table, record_identifier, context_details)
+               VALUES (%s, %s, %s, %s, %s);""",
+            (username, action_type, target_table, record_identifier, context_details),
+        )
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"Failed to write audit log: {e}")
