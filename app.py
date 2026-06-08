@@ -771,13 +771,19 @@ elif menu == "Feed Inventory Controller":
                         conn.close()
                         st.error(f"❌ Database error encountered: {e}")
 
-    # === SAFE DATA PREPARATION LAYER ===
+ # === SAFE DATA PREPARATION LAYER ===
     try:
         from database import execute_custom_query
-
-        # Unpack both the dataframe and the success boolean cleanly
-        # Unpack both the dataframe and the success boolean cleanly
-        df_inv, success = execute_custom_query("SELECT * FROM inventory ORDER BY item_name ASC;", is_select=True)  # type: ignore
+        
+        # 1. Fetch the raw query response safely
+        raw_res = execute_custom_query("SELECT * FROM inventory ORDER BY item_name ASC;", is_select=True)
+        
+        # 2. Safely extract the DataFrame out of the response regardless of type format
+        if isinstance(raw_res, tuple) and len(raw_res) > 0:
+            df_inv = raw_res[0]
+        else:
+            df_inv = raw_res
+            
     except Exception as e:
         st.error(f"⚠️ Live Database sync failed: {e}")
         df_inv = pd.DataFrame()
@@ -791,13 +797,14 @@ elif menu == "Feed Inventory Controller":
         else:
             df_active = df_inv.copy()
             df_inactive = pd.DataFrame()
-
+            
         # This completely rewrites the dropdown contents freshly on every single action click
         active_item_options = df_active["item_name"].dropna().unique().tolist()
     else:
         df_active = pd.DataFrame()
         df_inactive = pd.DataFrame()
         active_item_options = []
+
 
     # --- UPDATED TAB MANAGEMENT W/ MODIFY & DELETE ---
     tab_purchase, tab_modify, tab_status, tab_delete = st.tabs(
