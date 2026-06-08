@@ -1,13 +1,11 @@
-import sqlite3
+import psycopg2
 import pandas as pd
-
-DB_NAME = "herd_management.db"
+import streamlit as st
 
 
 def create_connection():
-    """Establishes and returns a robust connection to the local SQLite database."""
-    conn = sqlite3.connect(DB_NAME)
-    conn.execute("PRAGMA foreign_keys = ON;")
+    """Establishes and returns a robust connection to the live Supabase PostgreSQL cloud database."""
+    conn = psycopg2.connect(st.secrets["CONNECTION_STRING"])
     return conn
 
 
@@ -30,7 +28,7 @@ def init_db():
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS birth_records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             ewe_tag_no TEXT NOT NULL,
             birth_date TEXT NOT NULL,
             lambs_count INTEGER NOT NULL,
@@ -42,7 +40,7 @@ def init_db():
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS weight_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             tag_no TEXT NOT NULL,
             weight_kg REAL NOT NULL,
             feed_consumed_since_last_kg REAL DEFAULT 0.0,
@@ -85,7 +83,8 @@ def get_table_data(table_name):
     conn = create_connection()
     query = f"SELECT * FROM {table_name}"
     try:
-        df = pd.read_sql_query(query, conn)
+# Adding # type: ignore at the end tells VS Code type checker to relax
+        df = pd.read_sql_query(query, conn)  # type: ignore
     except Exception:
         df = pd.DataFrame()
     finally:
@@ -101,7 +100,10 @@ def execute_custom_query(query, params=(), is_select=True):
         cursor.execute(query, params)
         if is_select:
             data = cursor.fetchall()
-            colnames = [desc[0] for desc in cursor.description]
+            # If description is None, fall back to an empty list safely
+            colnames = (
+                [desc[0] for desc in cursor.description] if cursor.description else []
+            )
             result = pd.DataFrame(data, columns=colnames)
         else:
             conn.commit()
@@ -250,25 +252,23 @@ def save_feed_recipe_advanced(recipe_type, breakdown_string, calculated_cost):
 import psycopg2
 import streamlit as st
 
-
 def get_supabase_connection():
     """Establishes a direct, secure connection to the cloud Supabase PostgreSQL database."""
     conn_str = st.secrets["CONNECTION_STRING"]
     return psycopg2.connect(conn_str)
-
 
 def verify_user_login(username, password):
     """Checks the cloud app_users table to validate login credentials."""
     try:
         conn = get_supabase_connection()
         cursor = conn.cursor()
-
+        
         cursor.execute(
             "SELECT username, user_role FROM app_users WHERE username = %s AND password_hash = %s AND is_active = True;",
-            (username, password),
+            (username, password)
         )
         user = cursor.fetchone()
-
+        
         cursor.close()
         conn.close()
         return user  # Returns (username, role) if found, or None if incorrect
@@ -276,21 +276,18 @@ def verify_user_login(username, password):
         st.error(f"Database connection error: {e}")
         return None
 
-
-def log_system_activity(
-    username, action_type, target_table, record_identifier, context_details
-):
+def log_system_activity(username, action_type, target_table, record_identifier, context_details):
     """Automatically writes a security track log line to the online system_audit_logs table."""
     try:
         conn = get_supabase_connection()
         cursor = conn.cursor()
-
+        
         cursor.execute(
             """INSERT INTO system_audit_logs (username, action_type, target_table, record_identifier, context_details)
                VALUES (%s, %s, %s, %s, %s);""",
-            (username, action_type, target_table, record_identifier, context_details),
+            (username, action_type, target_table, record_identifier, context_details)
         )
-
+        
         conn.commit()
         cursor.close()
         conn.close()

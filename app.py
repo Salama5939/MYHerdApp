@@ -1,18 +1,18 @@
 # myHerdApp Engine - Comprehensive Herd Management Dashboard
-import streamlit as st
-import pandas as pd
-import plotly.express as px
+import streamlit as st # Streamlit for interactive web app development
+import pandas as pd # Pandas for data manipulation and analysis
+import plotly.express as px # Plotly Express for advanced interactive visualizations
 # import database
-import database as db  # Connects directly to your database.py file
-from datetime import datetime, date
-import sqlite3
-import requests
-import os
+import database as db  # Connects directly to your database.py file, for all database interactions and operations
+from datetime import datetime, date # For handling date inputs and formatting
+import sqlite3 # SQLite3 for direct database connections and operations within the feed inventory module
+import requests # Requests library for handling HTTP requests to Supabase storage for feed inventory synchronization
+import os # OS library for file handling operations related to the feed inventory database file
 
 # Page Layout Setup
 st.set_page_config(page_title="myHerdApp Engine", layout="wide", page_icon="🐑")
 
-# Initialize SQLite structures matching active configurations
+# Initialize the database and ensure all necessary tables are created before any operations
 db.initialize_db()
 
 # ==============================================================================
