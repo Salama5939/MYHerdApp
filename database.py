@@ -83,7 +83,7 @@ def get_table_data(table_name):
     conn = create_connection()
     query = f"SELECT * FROM {table_name}"
     try:
-# Adding # type: ignore at the end tells VS Code type checker to relax
+        # Adding # type: ignore at the end tells VS Code type checker to relax
         df = pd.read_sql_query(query, conn)  # type: ignore
     except Exception:
         df = pd.DataFrame()
@@ -93,27 +93,34 @@ def get_table_data(table_name):
 
 
 def execute_custom_query(query, params=(), is_select=True):
-    """Executes raw SQL commands safely with optional parameters."""
+    """Executes raw SQL commands safely, guaranteeing explicit commits for cloud tables."""
     conn = create_connection()
-    cursor = conn.cursor()
     try:
-        cursor.execute(query, params)
-        if is_select:
-            data = cursor.fetchall()
-            # If description is None, fall back to an empty list safely
-            colnames = (
-                [desc[0] for desc in cursor.description] if cursor.description else []
-            )
-            result = pd.DataFrame(data, columns=colnames)
-        else:
-            conn.commit()
-            result = True
+        # Using 'with' blocks forces Python to handle transactions and closings perfectly
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, params)
+
+                if is_select:
+                    data = cursor.fetchall()
+                    colnames = (
+                        [desc[0] for desc in cursor.description]
+                        if cursor.description
+                        else []
+                    )
+                    return pd.DataFrame(data, columns=colnames)
+                else:
+                    # Explicitly force the cloud connection pooler to save changes permanently
+                    conn.commit()
+                    return True
     except Exception as e:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except:
+            pass
         raise e
     finally:
         conn.close()
-    return result
 
 
 def get_connection():
