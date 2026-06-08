@@ -8,6 +8,7 @@ from datetime import datetime, date # For handling date inputs and formatting
 import sqlite3 # SQLite3 for direct database connections and operations within the feed inventory module
 import requests # Requests library for handling HTTP requests to Supabase storage for feed inventory synchronization
 import os # OS library for file handling operations related to the feed inventory database file
+from database import execute_custom_query
 
 # Page Layout Setup
 st.set_page_config(page_title="myHerdApp Engine", layout="wide", page_icon="🐑")
@@ -765,17 +766,23 @@ elif menu == "Feed Inventory Controller":
                         conn.close()
                         st.error(f"❌ Database error encountered: {e}")
 
-    # Ensure variables exist before rendering tabs
-    if "active_item_options" not in locals():
-        active_item_options = (
-            df_active["item_name"].tolist() if not df_active.empty else []
-        )
-    if "df_inactive" not in locals():
-        df_inactive = (
-            df_inv[df_inv["is_active"] == 0]
-            if "is_active" in df_inv.columns
-            else pd.DataFrame()
-        )
+    # === SAFE DATA PREPARATION LAYER ===
+    # This guarantees all variables exist and are calculated directly from your master cloud dataframe
+    if not df_inv.empty:
+        # 1. Split active items (where is_active is 1 or missing default)
+        if "is_active" in df_inv.columns:
+            df_active = df_inv[df_inv["is_active"] == 1]
+            df_inactive = df_inv[df_inv["is_active"] == 0]
+        else:
+            df_active = df_inv.copy()
+            df_inactive = pd.DataFrame()
+
+        # 2. Extract item name lists cleanly for dropdown menus
+        active_item_options = df_active["item_name"].dropna().unique().tolist()
+    else:
+        df_active = pd.DataFrame()
+        df_inactive = pd.DataFrame()
+        active_item_options = []
 
     # --- UPDATED TAB MANAGEMENT W/ MODIFY & DELETE ---
     tab_purchase, tab_modify, tab_status, tab_delete = st.tabs(
@@ -829,19 +836,15 @@ elif menu == "Feed Inventory Controller":
                 "Commit Movement Entry to Stock Ledger"
             )
             if submit_purch and chosen_stock_item:
-                conn = sqlite3.connect("feed_inventory.db", timeout=20)
-                cursor = conn.cursor()
-                # code will continue smoothly here with your next lines...
-                cursor.execute(
+                execute_custom_query(
                     """
                     UPDATE inventory 
                     SET quantity_kg = quantity_kg + ?, cost_per_kg = ? 
                     WHERE item_name = ?
                     """,
                     (stock_shift, updated_cost, chosen_stock_item),
+                    is_select=False,
                 )
-                conn.commit()
-                conn.close()
 
                 if "cached_inventory" in st.session_state:
                     del st.session_state.cached_inventory
@@ -851,209 +854,175 @@ elif menu == "Feed Inventory Controller":
                 )
                 st.rerun()
 
-        with tab_modify:
-            st.markdown("### Update Existing Commodity Configurations")
-            # =====================================
-            with tab_modify:
-                st.markdown("### Update Existing Commodity Configurations")
+    with tab_modify:
+        st.markdown("### Update Existing Commodity Configurations")
 
-            # 1. Keep the dropdown OUTSIDE the form so it triggers an instant update when changed
-            if active_item_options:
-                target_modify_item = st.selectbox(
-                    "Choose Ingredient to Modify:",
-                    active_item_options,
-                    key="modify_select",
+        if active_item_options:
+            target_modify_item = st.selectbox(
+                "Choose Ingredient to Modify:",
+                active_item_options,
+                key="modify_select",
+            )
+
+            current_q, current_r, current_c = 0.0, 100.0, 15.0
+            if not df_active.empty and target_modify_item:
+                m_row = df_active[df_active["item_name"] == target_modify_item]
+                if not m_row.empty:
+                    current_q = float(m_row.iloc[0]["quantity_kg"])
+                    current_r = float(m_row.iloc[0].get("reorder_level_kg", 100.0))
+                    current_c = float(m_row.iloc[0]["cost_per_kg"])
+
+            with st.form(key="modify_parameters_form"):
+                mod_col1, mod_col2, mod_col3 = st.columns(3)
+                with mod_col1:
+                    new_qty = st.number_input(
+                        "Direct Inventory Adjustment (kg):",
+                        value=current_q,
+                        step=10.0,
+                    )
+                with mod_col2:
+                    new_reorder = st.number_input(
+                        "Safety Reorder Threshold Alert level (kg):",
+                        value=current_r,
+                        step=10.0,
+                    )
+                with mod_col3:
+                    new_price = st.number_input(
+                        "Unit Value Cost per kg ($):", value=current_c, step=0.1
+                    )
+
+                submit_mod = st.form_submit_button("Save Altered Record Parameters")
+
+                if submit_mod and target_modify_item:
+                    execute_custom_query(
+                        """
+                        UPDATE inventory 
+                        SET quantity_kg = ?, reorder_level_kg = ?, cost_per_kg = ? 
+                        WHERE item_name = ?
+                        """,
+                        (new_qty, new_reorder, new_price, target_modify_item),
+                        is_select=False,
+                    )
+
+                    if "cached_inventory" in st.session_state:
+                        del st.session_state.cached_inventory
+                    st.success(
+                        f"✏️ Successfully updated settings for '{target_modify_item}'!"
+                    )
+                    st.rerun()
+        else:
+            st.info("No active materials available to edit.")
+
+    with tab_status:
+        st.markdown("### Change Ingredient Status Visibility")
+        st.info(
+            "Deactivating an item hides its slider from the formulation page, but leaves all historical data untouched."
+        )
+
+        col_deact, col_react = st.columns(2)
+        with col_deact:
+            st.markdown("#### ⏸️ Archive Unused Item")
+            with st.form(key="deactivate_form_isolated"):
+                if active_item_options:
+                    to_deactivate = st.selectbox(
+                        "Select Ingredient to Hide:",
+                        active_item_options,
+                        key="deact_box_isolated",
+                    )
+                    submit_deact = st.form_submit_button("Mark as Inactive / Archive")
+                    if submit_deact and to_deactivate:
+                        execute_custom_query(
+                            "UPDATE inventory SET is_active = 0 WHERE item_name = ?",
+                            (to_deactivate,),
+                            is_select=False,
+                        )
+
+                        if "cached_inventory" in st.session_state:
+                            del st.session_state.cached_inventory
+
+                        st.success(
+                            f"'{to_deactivate}' is now hidden from active formulation sliders."
+                        )
+                        st.rerun()
+                else:
+                    st.write("No active items to hide.")
+
+        with col_react:
+            st.markdown("#### ▶️ Reactivate Historical Item")
+            with st.form(key="reactivate_form_isolated"):
+                inactive_options = (
+                    df_inactive["item_name"].tolist() if not df_inactive.empty else []
+                )
+                if inactive_options:
+                    to_reactivate = st.selectbox(
+                        "Select Ingredient to Restore:",
+                        inactive_options,
+                        key="react_box_isolated",
+                    )
+                    submit_react = st.form_submit_button("Restore to Active Duty")
+                    if submit_react and to_reactivate:
+                        execute_custom_query(
+                            "UPDATE inventory SET is_active = 1 WHERE item_name = ?",
+                            (to_reactivate,),
+                            is_select=False,
+                        )
+
+                        if "cached_inventory" in st.session_state:
+                            del st.session_state.cached_inventory
+
+                        st.success(
+                            f"'{to_reactivate}' has been restored to your active slider dashboard!"
+                        )
+                        st.rerun()
+                else:
+                    st.write("No archived items found.")
+
+    with tab_delete:
+        st.markdown("### ⚠️ Permanent Record Removal")
+        st.error(
+            "Danger Zone: Deleting an item removes it permanently from your ledger file. This action cannot be undone."
+        )
+
+        all_deletable_items = df_inv["item_name"].tolist() if not df_inv.empty else []
+
+        with st.form(key="hard_delete_form"):
+            if all_deletable_items:
+                to_delete_permanently = st.selectbox(
+                    "Select Commodity to Wipe Permanently:",
+                    all_deletable_items,
+                    key="delete_select_box",
+                )
+                confirm_checkbox = st.checkbox(
+                    "I confirm that I want to completely delete this row and all its recorded weights from the file."
                 )
 
-                # Retrieve current specs to pre-populate form inputs dynamically
-                current_q, current_r, current_c = 0.0, 100.0, 15.0
-                if not df_active.empty and target_modify_item:
-                    m_row = df_active[df_active["item_name"] == target_modify_item]
-                    if not m_row.empty:
-                        current_q = float(m_row.iloc[0]["quantity_kg"])
-                        current_r = float(m_row.iloc[0].get("reorder_level_kg", 100.0))
-                        current_c = float(m_row.iloc[0]["cost_per_kg"])
-
-                # 2. Start the form container HERE for the inputs and submit button only
-                with st.form(key="modify_parameters_form"):
-                    mod_col1, mod_col2, mod_col3 = st.columns(3)
-                    with mod_col1:
-                        new_qty = st.number_input(
-                            "Direct Inventory Adjustment (kg):",
-                            value=current_q,
-                            step=10.0,
+                submit_delete = st.form_submit_button(
+                    "Permanently Execute Ledger Purge"
+                )
+                if submit_delete and to_delete_permanently:
+                    if not confirm_checkbox:
+                        st.error(
+                            "❌ Deletion aborted: You must check the confirmation box first."
                         )
-                    with mod_col2:
-                        new_reorder = st.number_input(
-                            "Safety Reorder Threshold Alert level (kg):",
-                            value=current_r,
-                            step=10.0,
+                    else:
+                        execute_custom_query(
+                            "DELETE FROM inventory WHERE item_name = ?",
+                            (to_delete_permanently,),
+                            is_select=False,
                         )
-                    with mod_col3:
-                        new_price = st.number_input(
-                            "Unit Value Cost per kg ($):", value=current_c, step=0.1
-                        )
-
-                    submit_mod = st.form_submit_button("Save Altered Record Parameters")
-
-                    if submit_mod and target_modify_item:
-                        import sqlite3
-
-                        conn = sqlite3.connect("feed_inventory.db", timeout=20)
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            """
-                            UPDATE inventory 
-                            SET quantity_kg = ?, reorder_level_kg = ?, cost_per_kg = ? 
-                            WHERE item_name = ?
-                        """,
-                            (new_qty, new_reorder, new_price, target_modify_item),
-                        )
-                        conn.commit()
-                        conn.close()
 
                         if "cached_inventory" in st.session_state:
                             del st.session_state.cached_inventory
                         st.success(
-                            f"✏️ Successfully updated settings for '{target_modify_item}'!"
+                            f"💥 '{to_delete_permanently}' has been permanently wiped from the ledger file database."
                         )
                         st.rerun()
             else:
-                st.info("No active materials available to edit.")
-                # ==========================================
+                st.info("No records present to delete.")
 
-        with tab_status:
-            st.markdown("### Change Ingredient Status Visibility")
-            st.info(
-                "Deactivating an item hides its slider from the formulation page, but leaves all historical data untouched."
-            )
-
-            col_deact, col_react = st.columns(2)
-            with col_deact:
-                st.markdown("#### ⏸️ Archive Unused Item")
-                with st.form(key="deactivate_form_isolated"):
-                    if active_item_options:
-                        to_deactivate = st.selectbox(
-                            "Select Ingredient to Hide:",
-                            active_item_options,
-                            key="deact_box_isolated",
-                        )
-                        submit_deact = st.form_submit_button(
-                            "Mark as Inactive / Archive"
-                        )
-                        if submit_deact and to_deactivate:
-                            import sqlite3
-
-                            conn = sqlite3.connect("feed_inventory.db", timeout=20)
-                            cursor = conn.cursor()
-                            cursor.execute(
-                                "UPDATE inventory SET is_active = 0 WHERE item_name = ?",
-                                (to_deactivate,),
-                            )
-                            conn.commit()
-                            conn.close()
-
-                            if "cached_inventory" in st.session_state:
-                                del st.session_state.cached_inventory
-
-                            st.success(
-                                f"'{to_deactivate}' is now hidden from active formulation sliders."
-                            )
-                            st.rerun()
-                    else:
-                        st.write("No active items to hide.")
-
-            with col_react:
-                st.markdown("#### ▶️ Reactivate Historical Item")
-                with st.form(key="reactivate_form_isolated"):
-                    inactive_options = (
-                        df_inactive["item_name"].tolist()
-                        if not df_inactive.empty
-                        else []
-                    )
-                    if inactive_options:
-                        to_reactivate = st.selectbox(
-                            "Select Ingredient to Restore:",
-                            inactive_options,
-                            key="react_box_isolated",
-                        )
-                        submit_react = st.form_submit_button("Restore to Active Duty")
-                        if submit_react and to_reactivate:
-                            import sqlite3
-
-                            conn = sqlite3.connect("feed_inventory.db", timeout=20)
-                            cursor = conn.cursor()
-                            cursor.execute(
-                                "UPDATE inventory SET is_active = 1 WHERE item_name = ?",
-                                (to_reactivate,),
-                            )
-                            conn.commit()
-                            conn.close()
-
-                            if "cached_inventory" in st.session_state:
-                                del st.session_state.cached_inventory
-
-                            st.success(
-                                f"'{to_reactivate}' has been restored to your active slider dashboard!"
-                            )
-                            st.rerun()
-                    else:
-                        st.write("No archived items found.")
-
-        with tab_delete:
-            st.markdown("### ⚠️ Permanent Record Removal")
-            st.error(
-                "Danger Zone: Deleting an item removes it permanently from your ledger file. This action cannot be undone."
-            )
-
-            # Combine active and inactive items so the user can wipe anything from existence
-            all_deletable_items = (
-                df_inv["item_name"].tolist() if not df_inv.empty else []
-            )
-
-            with st.form(key="hard_delete_form"):
-                if all_deletable_items:
-                    to_delete_permanently = st.selectbox(
-                        "Select Commodity to Wipe Permanently:",
-                        all_deletable_items,
-                        key="delete_select_box",
-                    )
-                    confirm_checkbox = st.checkbox(
-                        "I confirm that I want to completely delete this row and all its recorded weights from the file."
-                    )
-
-                    submit_delete = st.form_submit_button(
-                        "Permanently Execute Ledger Purge"
-                    )
-                    if submit_delete and to_delete_permanently:
-                        if not confirm_checkbox:
-                            st.error(
-                                "❌ Deletion aborted: You must check the confirmation box first."
-                            )
-                        else:
-                            import sqlite3
-
-                            conn = sqlite3.connect("feed_inventory.db", timeout=20)
-                            cursor = conn.cursor()
-                            cursor.execute(
-                                "DELETE FROM inventory WHERE item_name = ?",
-                                (to_delete_permanently,),
-                            )
-                            conn.commit()
-                            conn.close()
-
-                            if "cached_inventory" in st.session_state:
-                                del st.session_state.cached_inventory
-                            st.success(
-                                f"💥 '{to_delete_permanently}' has been permanently wiped from the ledger file database."
-                            )
-                            st.rerun()
-                else:
-                    st.info("No records present to delete.")
-
-        # --- DATAFRAME RENDERING: SYNCED EXCLUSIVELY WITH ISOLATED DB ---
-        st.subheader("Active Feed Stock Valuation & Safety Parameters")
-        if not df_inv.empty:
-            st.dataframe(df_inv, use_container_width=True, hide_index=True)
-        else:
-            st.info("No active records to display in the main inventory ledger.")
+    # --- DATAFRAME RENDERING ---
+    st.subheader("Active Feed Stock Valuation & Safety Parameters")
+    if not df_inv.empty:
+        st.dataframe(df_inv, use_container_width=True, hide_index=True)
+    else:
+        st.info("No active records to display in the main inventory ledger.")
