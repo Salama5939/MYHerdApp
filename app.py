@@ -1,4 +1,9 @@
 # myHerdApp Engine - Comprehensive Herd Management Dashboard
+# This Streamlit application serves as the central control interface for managing a sheep farming operation, 
+# integrating multiple modules for herd tracking, performance monitoring, and feed inventory management. 
+# The app connects to a SQLite database for local data storage and synchronizes with Supabase for cloud backup 
+# and multi-user access control. 
+
 import streamlit as st # Streamlit for interactive web app development
 import pandas as pd # Pandas for data manipulation and analysis
 import plotly.express as px # Plotly Express for advanced interactive visualizations
