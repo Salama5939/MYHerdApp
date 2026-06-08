@@ -1,8 +1,8 @@
 # myHerdApp Engine - Comprehensive Herd Management Dashboard
-# This Streamlit application serves as the central control interface for managing a sheep farming operation, 
-# integrating multiple modules for herd tracking, performance monitoring, and feed inventory management. 
-# The app connects to a SQLite database for local data storage and synchronizes with Supabase for cloud backup 
-# and multi-user access control. 
+# This Streamlit application serves as the central control interface for managing a sheep farming operation,
+# integrating multiple modules for herd tracking, performance monitoring, and feed inventory management.
+# The app connects to a SQLite database for local data storage and synchronizes with Supabase for cloud backup
+# and multi-user access control.
 
 import streamlit as st # Streamlit for interactive web app development
 import pandas as pd # Pandas for data manipulation and analysis
@@ -772,17 +772,27 @@ elif menu == "Feed Inventory Controller":
                         st.error(f"❌ Database error encountered: {e}")
 
     # === SAFE DATA PREPARATION LAYER ===
-    # This guarantees all variables exist and are calculated directly from your master cloud dataframe
-    if not df_inv.empty:
-        # 1. Split active items (where is_active is 1 or missing default)
+    try:
+        from database import execute_custom_query
+
+        # Unpack both the dataframe and the success boolean cleanly
+        # Unpack both the dataframe and the success boolean cleanly
+        df_inv, success = execute_custom_query("SELECT * FROM inventory ORDER BY item_name ASC;", is_select=True)  # type: ignore
+    except Exception as e:
+        st.error(f"⚠️ Live Database sync failed: {e}")
+        df_inv = pd.DataFrame()
+
+    # Dynamic calculation block - updates variables instantly on every single page rerun
+    if isinstance(df_inv, pd.DataFrame) and not df_inv.empty:
         if "is_active" in df_inv.columns:
-            df_active = df_inv[df_inv["is_active"] == 1]
-            df_inactive = df_inv[df_inv["is_active"] == 0]
+            # Safely handle both integer (1/0) and boolean values from the database rows
+            df_active = df_inv[df_inv["is_active"].astype(int) == 1]
+            df_inactive = df_inv[df_inv["is_active"].astype(int) == 0]
         else:
             df_active = df_inv.copy()
             df_inactive = pd.DataFrame()
 
-        # 2. Extract item name lists cleanly for dropdown menus
+        # This completely rewrites the dropdown contents freshly on every single action click
         active_item_options = df_active["item_name"].dropna().unique().tolist()
     else:
         df_active = pd.DataFrame()
@@ -988,7 +998,11 @@ elif menu == "Feed Inventory Controller":
             "Danger Zone: Deleting an item removes it permanently from your ledger file. This action cannot be undone."
         )
 
-        all_deletable_items = df_inv["item_name"].tolist() if not df_inv.empty else []
+        all_deletable_items = (
+            df_inv["item_name"].tolist()
+            if (isinstance(df_inv, pd.DataFrame) and not df_inv.empty)
+            else []
+        )
 
         with st.form(key="hard_delete_form"):
             if all_deletable_items:
@@ -1027,7 +1041,7 @@ elif menu == "Feed Inventory Controller":
 
     # --- DATAFRAME RENDERING ---
     st.subheader("Active Feed Stock Valuation & Safety Parameters")
-    if not df_inv.empty:
+    if isinstance(df_inv, pd.DataFrame) and not df_inv.empty:
         st.dataframe(df_inv, use_container_width=True, hide_index=True)
     else:
         st.info("No active records to display in the main inventory ledger.")
