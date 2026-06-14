@@ -1,25 +1,25 @@
-import streamlit as st
 import psycopg2
 import pandas as pd
+import streamlit as st
 
 
 def create_connection():
-    """Establishes a connection to the Cloud PostgreSQL database."""
-    # Now this works because 'st' is defined above
-    conn_str = st.secrets["CONNECTION_STRING"]
-    conn = psycopg2.connect(conn_str)
+    """Establishes a connection with the 'public' schema path fixed."""
+    conn = psycopg2.connect(st.secrets["CONNECTION_STRING"])
     with conn.cursor() as cursor:
-        cursor.execute("SET search_path TO public;")
+        cursor.execute(
+            "SET search_path TO public;"
+        )  # This tells Postgres where to find your data
     return conn
 
 
 def init_db():
-    """Initializes database tables in the public schema."""
-    conn = create_connection() # Establishes a connection to the PostgreSQL database using the connection string from Streamlit secrets.
+    """Initializes the database tables if they do not already exist."""
+    conn = create_connection()
+    cursor = conn.cursor()
 
-    cursor = conn.cursor() # Using 'public.' prefix to guarantee visibility
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS public.herd (
+        CREATE TABLE IF NOT EXISTS herd (
             tag_no TEXT PRIMARY KEY,
             category TEXT NOT NULL,
             status TEXT NOT NULL,
@@ -29,30 +29,33 @@ def init_db():
             comments TEXT
         );
     """)
+
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS public.birth_records (
+        CREATE TABLE IF NOT EXISTS birth_records (
             id SERIAL PRIMARY KEY,
             ewe_tag_no TEXT NOT NULL,
             birth_date TEXT NOT NULL,
             lambs_count INTEGER NOT NULL,
             foster_ewe_tag TEXT,
             comments TEXT,
-            FOREIGN KEY (ewe_tag_no) REFERENCES public.herd(tag_no) ON DELETE CASCADE
+            FOREIGN KEY (ewe_tag_no) REFERENCES herd(tag_no) ON DELETE CASCADE
         );
     """)
+
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS public.weight_logs (
+        CREATE TABLE IF NOT EXISTS weight_logs (
             id SERIAL PRIMARY KEY,
             tag_no TEXT NOT NULL,
             weight_kg REAL NOT NULL,
             feed_consumed_since_last_kg REAL DEFAULT 0.0,
             weigh_date TEXT NOT NULL,
             comments TEXT,
-            FOREIGN KEY (tag_no) REFERENCES public.herd(tag_no) ON DELETE CASCADE
+            FOREIGN KEY (tag_no) REFERENCES herd(tag_no) ON DELETE CASCADE
         );
     """)
+
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS public.inventory (
+        CREATE TABLE IF NOT EXISTS inventory (
             item_name TEXT PRIMARY KEY,
             quantity_kg REAL NOT NULL DEFAULT 0.0,
             reorder_level_kg REAL NOT NULL DEFAULT 100.0,
@@ -60,34 +63,33 @@ def init_db():
             is_active INTEGER NOT NULL DEFAULT 1
         );
     """)
+
+    # FIXED: Simplified layout to exactly match the dynamic 3-column parameters required by app.py
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS public.feed_recipes (
+        CREATE TABLE IF NOT EXISTS feed_recipes (
             recipe_type TEXT PRIMARY KEY CHECK(recipe_type IN ('Fattening', 'General Herd')),
             calculated_mix_cost_per_kg REAL NOT NULL DEFAULT 0.0,
             recipe_breakdown TEXT DEFAULT ''
         );
     """)
+
     conn.commit()
     cursor.close()
     conn.close()
 
 
 def initialize_db():
-    """Alias for app.py compatibility."""
+    """Alias function to satisfy app.py calling database.initialize_db()."""
     init_db()
 
 
 def get_table_data(table_name):
-    """Retrieves records using public schema."""
-    conn = create_connection() # Establishes a connection to the PostgreSQL database using the connection string from Streamlit secrets.
-
-    query = f"SELECT * FROM public.{table_name}" # Using 'public.' prefix to guarantee visibility
+    """Retrieves all records from a table as a Pandas DataFrame."""
+    conn = create_connection()
+    query = f"SELECT * FROM {table_name}"
     try:
-        with conn.cursor() as cursor:
-            cursor.execute(query)
-            rows = cursor.fetchall()
-            columns = [desc[0] for desc in cursor.description] if cursor.description else []
-            df = pd.DataFrame(rows, columns=columns)
+        # Adding # type: ignore at the end tells VS Code type checker to relax
+        df = pd.read_sql_query(query, conn)  # type: ignore
     except Exception:
         df = pd.DataFrame()
     finally:
@@ -96,12 +98,14 @@ def get_table_data(table_name):
 
 
 def execute_custom_query(query, params=(), is_select=True):
-    """Executes SQL safely."""
+    """Executes raw SQL commands safely, guaranteeing explicit commits for cloud tables."""
     conn = create_connection()
     try:
+        # Using 'with' blocks forces Python to handle transactions and closings perfectly
         with conn:
             with conn.cursor() as cursor:
                 cursor.execute(query, params)
+
                 if is_select:
                     data = cursor.fetchall()
                     colnames = (
@@ -111,16 +115,22 @@ def execute_custom_query(query, params=(), is_select=True):
                     )
                     return pd.DataFrame(data, columns=colnames)
                 else:
+                    # Explicitly force the cloud connection pooler to save changes permanently
                     conn.commit()
                     return True
     except Exception as e:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except:
+            pass
         raise e
     finally:
         conn.close()
 
 
-# ... (Keep your existing helper functions like add_animal, etc., below here)
+def get_connection():
+    """Returns a raw connection object for functions requiring direct manual cursors."""
+    return create_connection()
 
 
 # -------------------------------------------------------------------------
@@ -255,8 +265,8 @@ def save_feed_recipe_advanced(recipe_type, breakdown_string, calculated_cost):
     conn.close()
 
 
-# import psycopg2
-# import streamlit as st
+import psycopg2
+import streamlit as st
 
 
 def get_supabase_connection():

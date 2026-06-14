@@ -7,7 +7,6 @@
 import streamlit as st # Streamlit for interactive web app development
 import pandas as pd # Pandas for data manipulation and analysis
 import plotly.express as px # Plotly Express for advanced interactive visualizations
-# import database
 import database as db  # Connects directly to your database.py file, for all database interactions and operations
 from datetime import datetime, date # For handling date inputs and formatting
 import sqlite3 # SQLite3 for direct database connections and operations within the feed inventory module
@@ -35,16 +34,16 @@ st.markdown(
 
 
 # Initialize the database and ensure all necessary tables are created before any operations
-db.initialize_db()
-# def init_db():
+#db.initialize_db()
+def init_db():
 
 # Initialize global recipe cache from cloud on initial app boot
-if "cached_recipes" not in st.session_state or st.session_state.cached_recipes is None:
-    try:
-        st.session_state.cached_recipes = db.get_table_data("feed_recipes")
-    except Exception as e:
-        st.session_state.cached_recipes = []
-        st.error(f"Initial Cloud Recipe Fetch Failed: {e}")
+    if "cached_recipes" not in st.session_state or st.session_state.cached_recipes is None:
+        try:
+            st.session_state.cached_recipes = db.get_table_data("feed_recipes")
+        except Exception as e:
+            st.session_state.cached_recipes = []
+            st.error(f"Initial Cloud Recipe Fetch Failed: {e}")
 
 # ==============================================================================
 # 🔐 MULTI-USER ACCESS GATEWAY (Cloud Supabase Integration)
