@@ -4,8 +4,11 @@ import streamlit as st
 
 
 def create_connection():
-    """Establishes and returns a robust connection to the live Supabase PostgreSQL cloud database."""
+    """Establishes and returns a robust connection with the correct schema path."""
     conn = psycopg2.connect(st.secrets["CONNECTION_STRING"])
+    # This ensures your connection automatically looks in the 'public' folder
+    with conn.cursor() as cursor:
+        cursor.execute("SET search_path TO public;")
     return conn
 
 
@@ -318,4 +321,4 @@ def draw_home_button():
     # We use st.container to ensure it stays neatly at the top
     if st.button("⬅️ Return to Control Room"):
         st.switch_page("app.py")
-#====================================        
+# ====================================
