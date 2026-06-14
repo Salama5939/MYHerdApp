@@ -15,10 +15,6 @@ import requests # Requests library for handling HTTP requests to Supabase storag
 import os # OS library for file handling operations related to the feed inventory database file
 from database import execute_custom_query
 
-# Page Layout Setup
-# st.set_page_config(page_title="myHerdApp Engine", layout="wide", page_icon="🐑")
-
-# st.set_page_config(page_title="myHerdApp", layout="wide", initial_sidebar_state="collapsed", page_icon="🐑")
 
 # 🟢 This hides the sidebar on load and keeps it hidden
 st.set_page_config(
