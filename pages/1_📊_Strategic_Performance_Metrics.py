@@ -4,57 +4,56 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 📂 Tell Python to look one folder up to find your main cloud database.py file!
+# 📂 Path management to find main cloud database.py
 parent_dir = os.path.dirname(os.path.dirname(__file__))
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
-# ☁️ Safely import your live Supabase database module
+# ☁️ Import live Supabase database module
 import database as db
 
 # 🔒 SECURITY ACCESS LOCK
-if "authenticated" not in st.session_state or not st.session_state["authenticated"]:
+if "authenticated" not in st.session_state or not st.session_state.get(
+    "authenticated", False
+):
     st.warning("🔒 Access Denied. Please log in on the main Home Page first.")
     st.stop()
 
 st.title("Strategic Herd Performance & Summary Metrics")
 
-# 🟢 Add this one line to every page!
+# 🟢 Global Home Button
 db.draw_home_button()
 
 st.markdown("---")
 
-# 🌾 Fetch Live Data directly from your Supabase PostgreSQL cloud tables
+# 🌾 Fetch Live Data with Enhanced Diagnostics
 if "df_herd_cached" in st.session_state and st.session_state.df_herd_cached is not None:
     df_herd = st.session_state.df_herd_cached
 else:
     try:
+        # Perform the actual data fetch
         df_herd = db.get_table_data("herd")
         st.session_state.df_herd_cached = df_herd
-    except Exception as e:
-        st.error(f"Supabase Connection Error: {e}")
-        df_herd = pd.DataFrame(
-            columns=[
-                "tag_no",
-                "category",
-                "status",
-                "birth_date",
-                "registration_date",
-                "purchase_price",
-                "comments",
-            ]
-        )
 
+    except Exception as e:
+        # 🚨 DIAGNOSTIC MODE: This will show the error on the website
+        st.error("🚨 DATABASE CONNECTION ERROR")
+        st.write("The application tried to connect to the cloud database but failed.")
+        st.write(f"**Technical Details:** {e}")
+        st.write("---")
+        st.info(
+            "Possible causes: The 'herd' table is missing from the 'public' schema or the Connection String is incorrect."
+        )
+        st.stop()  # Stop the script so we don't try to draw charts with no data
+
+# 🔢 Calculations and Display
 if not df_herd.empty:
-    # 🔢 Live Population Calculations using your cloud schema columns
+    # Live Population Calculations
     total_active = len(df_herd)
     ewes_count = len(df_herd[df_herd["category"] == "Ewes"])
     fattening_count = len(df_herd[df_herd["category"] == "Fattening"])
-
-    # 🟢 FIXED: Look for Pregnant directly inside the category column
     pregnant_count = len(df_herd[df_herd["category"] == "Pregnant"])
 
-    # 🟢 FIXED: Search the category column for the words "Female" or "Male"
     small_female = len(
         df_herd[
             df_herd["category"].astype(str).str.contains("Female", na=False, case=False)
@@ -72,19 +71,18 @@ if not df_herd.empty:
         else 0
     )
 
-    # 📈 Top Row Metric Columns Dashboard Display
+    # Dashboard Metrics
     col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
-    col1.metric("Total Active Herd", total_active)
-    col2.metric("Ewes Count", ewes_count)
-    col3.metric("Pregnant Count", pregnant_count)
-    col4.metric("Fattening Count", fattening_count)
-    col5.metric("Small - Female", small_female)
-    col6.metric("Small - Male", small_male)
-    col7.metric("Total Lambings", total_lambings)
+    col1.metric("Total Active", total_active)
+    col2.metric("Ewes", ewes_count)
+    col3.metric("Pregnant", pregnant_count)
+    col4.metric("Fattening", fattening_count)
+    col5.metric("Small - F", small_female)
+    col6.metric("Small - M", small_male)
+    col7.metric("Lambings", total_lambings)
 
     st.markdown("### 📊 Structural Population Breakdowns")
 
-    # 🗂️ Split Layout Columns for Visual Charts
     chart_col1, chart_col2 = st.columns(2)
 
     with chart_col1:
@@ -108,7 +106,6 @@ if not df_herd.empty:
             hole=0.4,
             color_discrete_sequence=px.colors.qualitative.Pastel,
         )
-        # st.plotly_chart(fig_pie, use_container_width=True)
-        st.plotly_chart(fig_pie, width="stretch")
+        st.plotly_chart(fig_pie, use_container_width=True)
 else:
     st.info("📂 No active herd logs found in the cloud repository registries.")

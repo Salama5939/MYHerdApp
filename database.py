@@ -4,11 +4,12 @@ import streamlit as st
 
 
 def create_connection():
-    """Establishes and returns a robust connection with the correct schema path."""
+    """Establishes a connection with the 'public' schema path fixed."""
     conn = psycopg2.connect(st.secrets["CONNECTION_STRING"])
-    # This ensures your connection automatically looks in the 'public' folder
     with conn.cursor() as cursor:
-        cursor.execute("SET search_path TO public;")
+        cursor.execute(
+            "SET search_path TO public;"
+        )  # This tells Postgres where to find your data
     return conn
 
 
