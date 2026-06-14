@@ -3,14 +3,12 @@ import psycopg2
 import streamlit as st
 
 
-# 🟢 CHANGE 1: We accept 'db_filename' as an input now
-def migrate(db_filename):
-    print(f"\n🚀 Connecting to local SQLite database: {db_filename}...")
-    local_conn = sqlite3.connect(db_filename)
+def migrate():
+    print("🚀 Connecting to local SQLite database...")
+    local_conn = sqlite3.connect("herd_management.db")
     local_cursor = local_conn.cursor()
 
     print("☁️ Connecting to Supabase PostgreSQL database...")
-    # Using your existing secret
     cloud_conn = psycopg2.connect(st.secrets["CONNECTION_STRING"])
     cloud_cursor = cloud_conn.cursor()
 
@@ -84,13 +82,11 @@ def migrate(db_filename):
             cloud_conn.rollback()
             continue
 
-    # 🟢 CHANGE 2: After the loops, close everything inside this function
     cloud_conn.commit()
     local_conn.close()
     cloud_conn.close()
-    print(f"🎉 Migration for {db_filename} finished!")
+    print("\n🎉 All matched database tables have been successfully synchronized!")
+
 
 if __name__ == "__main__":
-    # 🟢 CHANGE 3: Now we call it for both files specifically!
-    migrate("herd_management.db")
-    migrate("feed_inventory.db")
+    migrate()

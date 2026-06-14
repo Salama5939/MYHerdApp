@@ -70,6 +70,7 @@ def init_db():
     """)
 
     conn.commit()
+    cursor.close()
     conn.close()
 
 
@@ -137,7 +138,7 @@ def add_animal(tag_no, category, status, birth_date, reg_date, price, comments="
     """Inserts a new sheep into the herd registry table with an optional comment parameter."""
     query = """
         INSERT INTO herd (tag_no, category, status, birth_date, registration_date, purchase_price, comments)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
     """
     execute_custom_query(
         query,
@@ -148,7 +149,8 @@ def add_animal(tag_no, category, status, birth_date, reg_date, price, comments="
 
 def update_animal_category(tag_no, new_category):
     """Updates the classification bucket of a specific animal ID."""
-    query = "UPDATE herd SET category = ? WHERE tag_no = ?"
+    # 🟢 Changed ? to %s for PostgreSQL
+    query = "UPDATE herd SET category = %s WHERE tag_no = %s"
     execute_custom_query(query, (new_category, tag_no), is_select=False)
 
 
@@ -158,7 +160,7 @@ def register_birth_event(
     """Logs a successful lambing birth occurrence with optional foster/comment specs."""
     query = """
         INSERT INTO birth_records (ewe_tag_no, birth_date, lambs_count, foster_ewe_tag, comments)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
     """
     execute_custom_query(
         query, (ewe_tag, birth_date, lambs_count, foster_ewe, comments), is_select=False
@@ -169,7 +171,7 @@ def log_growth_metrics_advanced(tag_no, weight, feed_kg, weigh_date, comments=""
     """Logs individual animal weight milestones and feed metrics with optional comments."""
     query = """
         INSERT INTO weight_logs (tag_no, weight_kg, feed_consumed_since_last_kg, weigh_date, comments)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
     """
     execute_custom_query(
         query,
@@ -184,12 +186,14 @@ def sell_or_slaughter_animal(tag_no, structural_status, sale_price=None, date_st
         log_comment = f"Sold for ${sale_price}"
         if date_str:
             log_comment += f" on {date_str}"
-        query = "UPDATE herd SET status = ?, comments = ? WHERE tag_no = ?"
+        # 🟢 Changed to %s for PostgreSQL
+        query = "UPDATE herd SET status = %s, comments = %s WHERE tag_no = %s"
         execute_custom_query(
             query, (structural_status, log_comment, tag_no), is_select=False
         )
     else:
-        query = "UPDATE herd SET status = ? WHERE tag_no = ?"
+        # 🟢 Changed to %s for PostgreSQL
+        query = "UPDATE herd SET status = %s WHERE tag_no = %s"
         execute_custom_query(query, (structural_status, tag_no), is_select=False)
 
 
@@ -203,7 +207,7 @@ def adjust_inventory_stock_advanced(item_name, amount_kg, cost_per_kg):
     conn = create_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT quantity_kg FROM inventory WHERE item_name = ?", (item_name,)
+        "SELECT quantity_kg FROM inventory WHERE item_name = %s", (item_name,)
     )
     row = cursor.fetchone()
 
@@ -212,8 +216,8 @@ def adjust_inventory_stock_advanced(item_name, amount_kg, cost_per_kg):
         cursor.execute(
             """
             UPDATE inventory 
-            SET quantity_kg = ?, cost_per_kg = ? 
-            WHERE item_name = ?
+            SET quantity_kg = %s, cost_per_kg = %s 
+            WHERE item_name = %s
         """,
             (new_qty, float(cost_per_kg), item_name),
         )
@@ -221,7 +225,7 @@ def adjust_inventory_stock_advanced(item_name, amount_kg, cost_per_kg):
         cursor.execute(
             """
             INSERT INTO inventory (item_name, quantity_kg, reorder_level_kg, cost_per_kg, is_active) 
-            VALUES (?, ?, 100.0, ?, 1)
+            VALUES (%s, %s, 100.0, %s, 1)
         """,
             (item_name, max(0.0, float(amount_kg)), float(cost_per_kg)),
         )
@@ -241,7 +245,7 @@ def save_feed_recipe_advanced(recipe_type, breakdown_string, calculated_cost):
     cursor.execute(
         """
         INSERT INTO feed_recipes (recipe_type, calculated_mix_cost_per_kg, recipe_breakdown)
-        VALUES (?, ?, ?)
+        VALUES (%s, %s, %s)
         ON CONFLICT(recipe_type) DO UPDATE SET
             calculated_mix_cost_per_kg = excluded.calculated_mix_cost_per_kg,
             recipe_breakdown = excluded.recipe_breakdown
@@ -288,15 +292,29 @@ def log_system_activity(username, action_type, target_table, record_identifier, 
     try:
         conn = get_supabase_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute(
             """INSERT INTO system_audit_logs (username, action_type, target_table, record_identifier, context_details)
                VALUES (%s, %s, %s, %s, %s);""",
             (username, action_type, target_table, record_identifier, context_details)
         )
-        
+
         conn.commit()
         cursor.close()
         conn.close()
     except Exception as e:
         print(f"Failed to write audit log: {e}")
+
+
+def update_single_record(table_name, pk_column, pk_value, target_column, new_value):
+    """Safely updates a single specific cell in the cloud database without destroying table structure."""
+    # We dynamically insert the table and column names, but safely parameterize the values
+    query = f"UPDATE {table_name} SET {target_column} = %s WHERE {pk_column} = %s"
+    execute_custom_query(query, (new_value, pk_value), is_select=False)
+
+
+def draw_home_button():
+    """Renders a consistent 'Return to Dashboard' button."""
+    # We use st.container to ensure it stays neatly at the top
+    if st.button("⬅️ Return to Control Room"):
+        st.switch_page("app.py")
