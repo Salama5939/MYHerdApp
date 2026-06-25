@@ -438,3 +438,26 @@ def draw_home_button():
     # We use st.container to ensure it stays neatly at the top
     if st.button("⬅️ Return to Control Room"):
         st.switch_page("app.py")
+
+
+def update_table_record(table_name, record_id, column_name, new_value):
+    """Updates a single record in any table."""
+    conn = get_supabase_connection()
+    cur = conn.cursor()
+    # Note: We use dynamic SQL carefully here.
+    query = f"UPDATE public.{table_name} SET {column_name} = %s WHERE id = %s"
+    cur.execute(query, (new_value, record_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def delete_table_record(table_name, record_id):
+    """Deletes a single record from any table."""
+    conn = get_supabase_connection()
+    cur = conn.cursor()
+    query = f"DELETE FROM public.{table_name} WHERE id = %s"
+    cur.execute(query, (record_id,))
+    conn.commit()
+    cur.close()
+    conn.close()

@@ -1,134 +1,59 @@
-import sys
-import os
 import streamlit as st
 import pandas as pd
-
-# 📂 Path setup to find your database.py file
-parent_dir = os.path.dirname(os.path.dirname(__file__))
-if parent_dir not in sys.path:
-    sys.path.append(parent_dir)
-
 import working_before_merging_database as db
 
-# 🔒 SECURITY ACCESS LOCK
-if "authenticated" not in st.session_state or not st.session_state["authenticated"]:
-    st.warning("🔒 Access Denied. Please log in on the main Home Page first.")
-    st.stop()
-
-st.title("🛠️ System Data Editor & Corrections Panel")
-
-# 🟢 Add this one line to every page!
+st.title("🛠 System Data Editor & Corrections Panel")
 db.draw_home_button()
 
-st.warning(
-    "Management Notice: Changes made here directly modify permanent cloud database rows. Proceed with precision."
-)
-
-# 🗺️ Map the human-readable names to both the SQL table name AND its Primary Key column
-db_table_map = {
-    "Herd Registry (herd)": ("herd", "tag_no"),
-    "Weight Logs (weight_logs)": ("weight_logs", "id"),
-    "Birth Records (birth_records)": ("birth_records", "id"),
-    "Feed Inventory (inventory)": ("inventory", "item_name"),
-}
-
+# 1. Select Table
 table_choice = st.selectbox(
-    "Select the Database Table you need to view and edit:", list(db_table_map.keys())
+    "Select the Database Table to view/edit:", ["birth_records", "herd"]
 )
 
-target_table, pk_col = db_table_map[table_choice]
-
-# 🌾 Fetch Live Data
+# 2. Fetch Data
 try:
-    df_current = db.get_table_data(target_table)
+    df = db.get_table_data(table_choice)
+    st.write(f"### Live Spreadsheet View: {table_choice}")
+    st.dataframe(df, use_container_width=True, hide_index=True)
 except Exception as e:
-    st.error(f"Failed to load table: {e}")
-    df_current = pd.DataFrame()
+    st.error(f"Error loading table: {e}")
+    st.stop()
 
-if not df_current.empty:
-    # 📋 1. Display the Spreadsheet View
-    st.subheader(f"Live Spreadsheet View: {target_table}")
-    st.info(
-        "💡 UI Shortcut: Click on any row in the table below to instantly load it into Box 1!"
-    )
+# 3. Targeted Record Correction
+st.markdown("---")
+st.subheader("🎯 Targeted Record Correction")
 
-    # 🟢 NEW: Enable row selection and capture the click event
-    grid_response = st.dataframe(
-        df_current,
-        use_container_width=True,
-        hide_index=True,
-        on_select="rerun",
-        selection_mode="single-row",
-    )
+col1, col2, col3 = st.columns(3)
 
-    # 🟢 NEW: Figure out which row was clicked and grab its Primary Key SAFELY
-    selected_pk_value = None
+with col1:
+    # We assume 'id' column exists. If it's a different primary key, adjust accordingly.
+    record_id = st.selectbox("1. Select Record by ID:", df["id"].tolist())
 
-    # Safely check if the keys exist to satisfy VS Code's strict Pylance checker
-    if "selection" in grid_response and "rows" in grid_response["selection"]:
-        selected_rows = grid_response["selection"]["rows"]
-        if len(selected_rows) > 0:
-            selected_row_idx = selected_rows[0]
-            selected_pk_value = str(df_current.iloc[selected_row_idx][pk_col])
+with col2:
+    # Filter out 'id' so users don't accidentally try to edit the primary key
+    columns = [c for c in df.columns if c != "id"]
+    column_to_edit = st.selectbox("2. Select Column to Correct:", columns)
 
-    st.markdown("---")
+with col3:
+    new_value = st.text_input("3. Enter The New Correct Value:")
 
-    # 🎯 2. The Targeted Correction Tool
-    st.subheader("🎯 Targeted Record Correction")
+# 4. Commit Actions
+col_a, col_b = st.columns(2)
 
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        # Dropdown of all Primary Keys in the selected table
-        record_list = df_current[pk_col].astype(str).tolist()
-
-        # 🟢 NEW: Automatically change the dropdown to match the clicked row
-        default_index = 0
-        if selected_pk_value in record_list:
-            default_index = record_list.index(selected_pk_value)
-
-        target_record = st.selectbox(
-            f"1. Select Record by {pk_col}:", record_list, index=default_index
-        )
-
-    with col2:
-        # Dropdown of all editable columns
-        editable_columns = [col for col in df_current.columns if col != pk_col]
-        target_column = st.selectbox("2. Select Column to Correct:", editable_columns)
-
-    with col3:
-        # DYNAMIC INPUT: Changes based on what is selected in col2
-        if target_column == "category":
-            categories = [
-                "Ewes",
-                "Fattening",
-                "Small Sheep - Female",
-                "Small Sheep - Male",
-                "Pregnant",
-                "Permanent Sire",
-            ]
-            new_value = st.selectbox("3. Select New Correct Category:", categories)
-        elif target_column == "status":
-            statuses = ["Active/Healthy", "Sold", "Deceased"]
-            new_value = st.selectbox("3. Select New Correct Status:", statuses)
-        else:
-            new_value = st.text_input("3. Enter the New Correct Value:")
-
-    # Action button placed securely below the columns
+with col_a:
     if st.button("Commit Correction to Cloud Database", type="primary"):
-        if str(new_value).strip() == "":
-            st.error("Validation Error: The new value cannot be entirely empty.")
-        else:
-            try:
-                db.update_single_record(
-                    target_table, pk_col, target_record, target_column, new_value
-                )
-                st.success(
-                    f"Success! Record '{target_record}' has been updated in the '{target_table}' table."
-                )
-                st.rerun()
-            except Exception as e:
-                st.error(f"Database Execution Error: {e}")
+        try:
+            db.update_table_record(table_choice, record_id, column_to_edit, new_value)
+            st.success(f"Success! Record {record_id} updated.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Update failed: {e}")
 
-else:
-    st.info(f"📂 The '{target_table}' table currently contains zero records to edit.")
+with col_b:
+    if st.button("DELETE RECORD (Permanent)", type="secondary"):
+        try:
+            db.delete_table_record(table_choice, record_id)
+            st.warning(f"Deleted Record {record_id}.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Delete failed: {e}")
