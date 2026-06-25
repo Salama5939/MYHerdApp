@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 import working_before_merging_database as db
 
+st.set_page_config(layout="wide")
 st.title("🛠 System Data Editor & Corrections Panel")
 db.draw_home_button()
 
 # 1. Define the unique identifier for each table
-# This map tells the code: "If user picks herd, use tag_no. If birth_records, use id."
+# This is the "Key" that tells the code which column is the unique ID
 pk_map = {"birth_records": "id", "herd": "tag_no"}
 
 # 2. Select Table
@@ -14,7 +15,7 @@ table_choice = st.selectbox(
     "Select the Database Table to view/edit:", list(pk_map.keys())
 )
 
-# Determine the Primary Key for this table
+# Determine the Primary Key for this table based on the selection
 current_pk = pk_map[table_choice]
 
 # 3. Fetch Data
@@ -32,14 +33,15 @@ st.subheader("🎯 Targeted Record Correction")
 
 col1, col2, col3 = st.columns(3)
 
+# Use current_pk to dynamically look up the list of IDs
+# We use .astype(str) to ensure dropdown handles both numbers and text tags
+record_id_list = df[current_pk].astype(str).tolist()
+
 with col1:
-    # Use the 'current_pk' variable here
-    record_id = st.selectbox(
-        f"1. Select Record by {current_pk}:", df[current_pk].astype(str).tolist()
-    )
+    record_id = st.selectbox(f"1. Select Record by {current_pk}:", record_id_list)
 
 with col2:
-    # Filter out the PK so we don't accidentally rename an ID
+    # Filter out the PK so we don't accidentally rename the ID itself
     columns = [c for c in df.columns if c != current_pk]
     column_to_edit = st.selectbox("2. Select Column to Correct:", columns)
 
@@ -50,9 +52,9 @@ with col3:
 col_a, col_b = st.columns(2)
 
 with col_a:
-    if st.button("Commit Correction to Cloud Database", type="primary"):
+    if st.button("Commit Correction", type="primary"):
         try:
-            # Pass the current_pk to the helper function
+            # We pass current_pk to the function so it knows WHERE to look
             db.update_table_record(
                 table_choice, current_pk, record_id, column_to_edit, new_value
             )
