@@ -1,47 +1,25 @@
 import streamlit as st
 import psycopg2
-from psycopg2.extras import RealDictCursor
 import pandas as pd
-from datetime import datetime
 
 
 def create_connection():
     """Establishes a connection to the Cloud PostgreSQL database."""
+    # Now this works because 'st' is defined above
     conn_str = st.secrets["CONNECTION_STRING"]
-    # We use RealDictCursor so queries return results like a dictionary (key:value)
-    conn = psycopg2.connect(conn_str, cursor_factory=RealDictCursor)
+    conn = psycopg2.connect(conn_str)
     with conn.cursor() as cursor:
         cursor.execute("SET search_path TO public;")
     return conn
 
 
-def execute_custom_query(query, params=(), is_select=True):
-    """Executes SQL safely against the Cloud PostgreSQL database."""
-    conn = create_connection()
-    try:
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute(query, params)
-                if is_select:
-                    data = cursor.fetchall()
-                    # Convert list of RealDictRow to DataFrame
-                    return pd.DataFrame([dict(row) for row in data])
-                else:
-                    conn.commit()
-                    return True
-    except Exception as e:
-        conn.rollback()
-        raise e
-    finally:
-        conn.close()
-
-
 def init_db():
-    """Initializes all tables (Herd + Finance) in the Cloud PostgreSQL database."""
-    conn = create_connection()
-    cursor = conn.cursor()
+    """Initializes database tables in the public schema."""
+    conn = (
+        create_connection()
+    )  # Establishes a connection to the PostgreSQL database using the connection string from Streamlit secrets.
 
-    # Herd Tables
+    cursor = conn.cursor()  # Using 'public.' prefix to guarantee visibility
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.herd (
             tag_no TEXT PRIMARY KEY,
@@ -61,11 +39,9 @@ def init_db():
             lambs_count INTEGER NOT NULL,
             foster_ewe_tag TEXT,
             comments TEXT,
-            newborn_tag TEXT, -- 👈 Added this
             FOREIGN KEY (ewe_tag_no) REFERENCES public.herd(tag_no) ON DELETE CASCADE
         );
     """)
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.weight_logs (
             id SERIAL PRIMARY KEY,
@@ -88,126 +64,69 @@ def init_db():
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.feed_recipes (
-            recipe_type TEXT PRIMARY KEY,
+            recipe_type TEXT PRIMARY KEY CHECK(recipe_type IN ('Fattening', 'General Herd')),
             calculated_mix_cost_per_kg REAL NOT NULL DEFAULT 0.0,
             recipe_breakdown TEXT DEFAULT ''
         );
     """)
-
-    # Finance Tables
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS public.chart_of_accounts (
-            account_code INTEGER PRIMARY KEY,
-            account_name TEXT NOT NULL UNIQUE,
-            account_type TEXT NOT NULL
-        );
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS public.batch_profitability_meta (
-            batch_id TEXT PRIMARY KEY,
-            batch_name TEXT NOT NULL,
-            target_head_count INTEGER NOT NULL DEFAULT 0,
-            start_date TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'Active'
-        );
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS public.financial_transactions (
-            tx_id SERIAL PRIMARY KEY,
-            date TEXT NOT NULL,
-            account_code INTEGER NOT NULL,
-            description TEXT NOT NULL,
-            amount REAL NOT NULL,
-            tx_flow TEXT NOT NULL,
-            batch_id_tag TEXT,
-            is_approved INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY (account_code) REFERENCES public.chart_of_accounts(account_code),
-            FOREIGN KEY (batch_id_tag) REFERENCES public.batch_profitability_meta(batch_id) ON DELETE SET NULL
-        );
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS public.capital_assets_depreciation (
-            asset_id TEXT PRIMARY KEY,
-            asset_name TEXT NOT NULL,
-            category TEXT NOT NULL,
-            purchase_date TEXT NOT NULL,
-            purchase_cost REAL NOT NULL,
-            useful_life_months INTEGER NOT NULL,
-            accumulated_depreciation REAL DEFAULT 0.0
-        );
-    """)
-
     conn.commit()
     cursor.close()
     conn.close()
 
-    # Seed Finance Accounts
-    seed_standard_chart_of_accounts()
+
+def initialize_db():
+    """Alias for app.py compatibility."""
+    init_db()
 
 
-## Seed the standard chart of accounts with predefined entries
+def get_table_data(table_name):
+    """Retrieves records using public schema."""
+    conn = (
+        create_connection()
+    )  # Establishes a connection to the PostgreSQL database using the connection string from Streamlit secrets.
 
-
-def seed_standard_chart_of_accounts():
-    accounts = [
-        (1010, "Cash & Bank Accounts", "Asset"),
-        (4010, "Revenue - Fattening Sheep Sales", "Revenue"),
-        (5020, "Direct Cost - Feed Raw Material Invoices", "Expense"),
-    ]
-    for code, name, acc_type in accounts:
-        query = """
-            INSERT INTO public.chart_of_accounts (account_code, account_name, account_type)
-            VALUES (%s, %s, %s) ON CONFLICT(account_code) DO NOTHING;
-        """
-        execute_custom_query(query, (code, name, acc_type), is_select=False)
-
-
-# --- FINANCE FUNCTIONS ---
-
-
-def create_new_fattening_batch(batch_id, batch_name, head_count, start_date):
-    query = "INSERT INTO public.batch_profitability_meta (batch_id, batch_name, target_head_count, start_date) VALUES (%s, %s, %s, %s)"
+    query = f"SELECT * FROM public.{table_name}"  # Using 'public.' prefix to guarantee visibility
     try:
-        return execute_custom_query(
-            query, (batch_id, batch_name, head_count, start_date), is_select=False
-        )
-    except:
-        return False
+        with conn.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            columns = (
+                [desc[0] for desc in cursor.description] if cursor.description else []
+            )
+            df = pd.DataFrame(rows, columns=columns)
+    except Exception:
+        df = pd.DataFrame()
+    finally:
+        conn.close()
+    return df
 
 
-def record_financial_transaction(
-    date_str, account_code, description, amount, tx_flow, batch_tag=None, approved=1
-):
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    query = """INSERT INTO public.financial_transactions (date, account_code, description, amount, tx_flow, batch_id_tag, is_approved, created_at) 
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
-    execute_custom_query(
-        query,
-        (
-            date_str,
-            account_code,
-            description,
-            amount,
-            tx_flow,
-            batch_tag,
-            approved,
-            now_str,
-        ),
-        is_select=False,
-    )
+def execute_custom_query(query, params=(), is_select=True):
+    """Executes SQL safely."""
+    conn = create_connection()
+    try:
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, params)
+                if is_select:
+                    data = cursor.fetchall()
+                    colnames = (
+                        [desc[0] for desc in cursor.description]
+                        if cursor.description
+                        else []
+                    )
+                    return pd.DataFrame(data, columns=colnames)
+                else:
+                    conn.commit()
+                    return True
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 
-def get_executive_p_and_l():
-    query = """
-        SELECT a.account_name, a.account_type, 
-        SUM(CASE WHEN t.tx_flow = 'CREDIT' THEN t.amount ELSE 0 END) as credits,
-        SUM(CASE WHEN t.tx_flow = 'DEBIT' THEN t.amount ELSE 0 END) as debits
-        FROM public.financial_transactions t
-        JOIN public.chart_of_accounts a ON t.account_code = a.account_code
-        GROUP BY a.account_name, a.account_type
-    """
-    return execute_custom_query(query)
+# ... (Keep your existing helper functions like add_animal, etc., below here)
 
 
 # -------------------------------------------------------------------------
@@ -233,6 +152,22 @@ def update_animal_category(tag_no, new_category):
     # 🟢 Changed ? to %s for PostgreSQL
     query = "UPDATE herd SET category = %s WHERE tag_no = %s"
     execute_custom_query(query, (new_category, tag_no), is_select=False)
+
+
+# Old function commented out for future reference; replaced by register_birth_and_update_herd in app.py
+# def register_birth_event(
+#    ewe_tag, birth_date, lambs_count, foster_ewe=None, comments=""
+# ):
+#    """Logs a successful lambing birth occurrence with optional foster/comment specs."""
+#    query = """
+#        INSERT INTO birth_records (ewe_tag_no, birth_date, lambs_count, foster_ewe_tag, comments)
+#        VALUES (%s, %s, %s, %s, %s)
+#    """
+#    execute_custom_query(
+#        query, (ewe_tag, birth_date, lambs_count, foster_ewe, comments), is_select=False
+#    )
+
+# New function to handle both birth registration and herd update in a single transaction
 
 
 def register_birth_and_update_herd(

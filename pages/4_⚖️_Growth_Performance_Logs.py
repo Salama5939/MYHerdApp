@@ -9,7 +9,7 @@ parent_dir = os.path.dirname(os.path.dirname(__file__))
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
-import database as db
+import working_before_merging_database as db
 
 # 🔒 SECURITY ACCESS LOCK
 if "authenticated" not in st.session_state or not st.session_state["authenticated"]:
