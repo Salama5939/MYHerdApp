@@ -236,44 +236,49 @@ def update_animal_category(tag_no, new_category):
 
 
 def register_birth_and_update_herd(
-    ewe_tag, birth_date, count, foster_val, comments, newborn_tag, newborn_cat
+    ewe_tag, birth_date, count, foster_val, comments, lambs_list
 ):
-    conn = get_supabase_connection()  # Assuming you have a connection helper
+    """
+    lambs_list: A list of dictionaries, e.g.,
+    [{'tag': '123', 'cat': 'Small - Male'}, {'tag': '124', 'cat': 'Small - Female'}]
+    """
+    conn = get_supabase_connection()
     cur = conn.cursor()
     try:
-        # 1. Update Mother (Change to Ewe)
+        # 1. Update Mother status
         cur.execute(
             "UPDATE public.herd SET category = 'Ewe' WHERE tag_no = %s", (ewe_tag,)
         )
 
-        # 2. Insert Birth Record
+        # 2. Insert Birth Record (Store all tags in comments or a new field)
+        tags_str = ", ".join([l["tag"] for l in lambs_list])
         sql_birth = """
         INSERT INTO public.birth_records (ewe_tag_no, birth_date, lambs_count, foster_ewe_tag, comments, newborn_tag)
         VALUES (%s, %s, %s, %s, %s, %s)
         """
         cur.execute(
-            sql_birth, (ewe_tag, birth_date, count, foster_val, comments, newborn_tag)
+            sql_birth, (ewe_tag, birth_date, count, foster_val, comments, tags_str)
         )
 
-        # 3. Create New Lamb (New Herd Entry)
+        # 3. Create New Lamb Entries (Loop through all lambs)
         sql_lamb = """
         INSERT INTO public.herd (tag_no, category, status, birth_date, registration_date)
         VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (tag_no) DO NOTHING
         """
-        cur.execute(
-            sql_lamb,
-            (newborn_tag, newborn_cat, "Active/Healthy", birth_date, birth_date),
-        )
+        for lamb in lambs_list:
+            cur.execute(
+                sql_lamb,
+                (lamb["tag"], lamb["cat"], "Active/Healthy", birth_date, birth_date),
+            )
 
-        conn.commit()  # Save everything
-        cur.close()
-        conn.close()
+        conn.commit()
     except Exception as e:
-        conn.rollback()  # Undo everything if any error occurs
+        conn.rollback()
+        raise e
+    finally:
         cur.close()
         conn.close()
-        raise e  # Pass the error to the UI to show to the user
 
 
 def log_growth_metrics_advanced(tag_no, weight, feed_kg, weigh_date, comments=""):
