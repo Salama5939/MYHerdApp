@@ -281,6 +281,13 @@ def register_birth_and_update_herd(
         conn.close()
 
 
+# This function logs individual animal weight milestones and feed metrics with optional comments.
+# Moreover, it ensures that the weight and feed values are stored as floats for consistency in calculations and reporting.
+# Calculations and reporting can be performed more accurately when the data types are consistent, especially for numerical operations
+# however, if the weight or feed values are not valid floats, it will raise a ValueError, which should be handled by the calling function to ensure data integrity.
+# Explanation: The function takes in parameters for the animal's tag number, weight, feed consumed since the last weigh-in, the date of weighing, and any optional comments. It constructs an SQL query to insert this data into the weight_logs table. The execute_custom_query function is then called to execute this query, ensuring that the data is safely inserted into the database.
+
+
 def log_growth_metrics_advanced(tag_no, weight, feed_kg, weigh_date, comments=""):
     """Logs individual animal weight milestones and feed metrics with optional comments."""
     query = """
@@ -316,6 +323,14 @@ def sell_or_slaughter_animal(tag_no, structural_status, sale_price=None, date_st
 # -------------------------------------------------------------------------
 
 
+# This function adjusts the inventory stock for a given item, ensuring that the quantity does not go below zero. It also updates the cost per kilogram for the item. If the item does not exist in the inventory, it inserts a new record with a default reorder level and active status.
+# However, if the amount to adjust is negative and exceeds the current stock, it will set the quantity to zero instead of allowing a negative stock level. This ensures that inventory levels remain accurate and prevents potential errors in stock management.
+# Methodology: The function first retrieves the current quantity of the specified item from the inventory.
+# It then calculates the new quantity by adding the adjustment amount to the current quantity,
+# ensuring that it does not fall below zero.
+# Finally, it updates the inventory record or inserts a new one as necessary, committing the changes to the database.
+
+
 def adjust_inventory_stock_advanced(item_name, amount_kg, cost_per_kg):
     """Safely adjusts raw ingredient balances matching the strict layout."""
     conn = create_connection()
@@ -346,6 +361,13 @@ def adjust_inventory_stock_advanced(item_name, amount_kg, cost_per_kg):
 
     conn.commit()
     conn.close()
+
+
+# This function saves advanced dynamic configurations for feed recipes, including the recipe type, a serialized breakdown of the recipe, and the calculated cost per kilogram. It ensures that any inventory item is captured and can be parsed natively by the application. If a recipe with the same type already exists, it updates the existing record instead of creating a duplicate.
+# The function uses a PostgreSQL "ON CONFLICT" clause to handle the upsert operation, ensuring that the database remains consistent and avoids duplicate entries for the same recipe type. This allows for efficient management of feed recipes and their associated costs within the system.
+# Methodology: The function establishes a connection to the database, prepares an SQL query to insert or update the feed recipe, and executes the query with the provided parameters. It then commits the changes and closes the connection to ensure data integrity and resource management.
+# Moreover, the use of parameterized queries helps prevent SQL injection attacks, enhancing the security of the application.
+# However, if the calculated cost is not a valid float, it will raise a ValueError, which should be handled by the calling function to ensure data integrity.
 
 
 def save_feed_recipe_advanced(recipe_type, breakdown_string, calculated_cost):
@@ -426,6 +448,13 @@ def log_system_activity(
         print(f"Failed to write audit log: {e}")
 
 
+# This function updates a single specific cell in the cloud database without destroying the table structure.
+# It takes the table name, primary key column, primary key value, target column, and new value as parameters.
+# The function constructs an SQL UPDATE query dynamically while safely parameterizing the values to prevent SQL injection. It then executes the query using the execute_custom_query function, which handles the database connection and execution.
+# Methodology: The function uses f-strings to dynamically insert the table and column names into the SQL query.
+# The values for the new value and primary key are passed as parameters to the execute_custom_query function,
+# which safely executes the query against the database.
+# This approach ensures that only the specified cell is updated without affecting the overall structure of the table or other records.
 def update_single_record(table_name, pk_column, pk_value, target_column, new_value):
     """Safely updates a single specific cell in the cloud database without destroying table structure."""
     # We dynamically insert the table and column names, but safely parameterize the values
@@ -438,6 +467,17 @@ def draw_home_button():
     # We use st.container to ensure it stays neatly at the top
     if st.button("⬅️ Return to Control Room"):
         st.switch_page("app.py")
+
+
+# This function updates a record in a specified table using a dynamic key column.
+# It constructs an SQL UPDATE query based on the provided table name, key column, record ID, target column, and new value.
+# The function establishes a connection to the database, executes the query with parameterized values to prevent SQL injection, commits the changes, and closes the connection.
+# Methodology: The function uses f-strings to dynamically insert the table and column names into the SQL query.
+# The values for the new value and record ID are passed as parameters to the cursor's execute method,
+# which safely executes the query against the database.
+# This approach allows for flexible updates to records in different tables without hardcoding the table or column names, while ensuring data integrity and security.
+# Conclusion: The function provides a secure and efficient way to update records in the database,
+# accommodating various table structures and key columns as needed.
 
 
 def update_table_record(table_name, key_column, record_id, column_name, new_value):
