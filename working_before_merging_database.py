@@ -1,6 +1,15 @@
 import streamlit as st
 import psycopg2
+from psycopg2.extras import RealDictCursor
 import pandas as pd
+from datetime import datetime
+from supabase import create_client, Client
+
+# Initialize the Supabase client
+# Make sure these match your specific setup (e.g., secrets from Streamlit)
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(url, key)
 
 
 def create_connection():
@@ -216,17 +225,31 @@ def register_birth_and_update_herd(
         conn.close()
 
 
-def log_growth_metrics_advanced(tag_no, weight, feed_kg, weigh_date, comments=""):
-    """Logs individual animal weight milestones and feed metrics with optional comments."""
-    query = """
-        INSERT INTO weight_logs (tag_no, weight_kg, feed_consumed_since_last_kg, weigh_date, comments)
-        VALUES (%s, %s, %s, %s, %s)
+def log_growth_metrics_advanced(
+    tag_no, weight, feed_kg, feed_cost, weigh_date, comments
+):
     """
-    execute_custom_query(
-        query,
-        (tag_no, float(weight), float(feed_kg), weigh_date, comments),
-        is_select=False,
-    )
+    Saves growth logs to the Supabase weight_logs table.
+    """
+    try:
+        # Create the data dictionary
+        # IMPORTANT: The keys (left side) MUST match your exact
+        # column names in the Supabase 'weight_logs' table.
+        data = {
+            "tag_no": tag_no,
+            "weight_kg": weight,
+            "feed_consumed_since_last_kg": feed_kg,  # Ensure this matches your DB column name
+            "feed_cost": feed_cost,  # <--- THIS IS THE NEW PART
+            "weigh_date": weigh_date,
+            "comments": comments,
+        }
+
+        # Insert into Supabase
+        response = supabase.table("weight_logs").insert(data).execute()
+        return response
+    except Exception as e:
+        print(f"Error logging metrics: {e}")
+        raise e
 
 
 def sell_or_slaughter_animal(tag_no, structural_status, sale_price=None, date_str=None):
