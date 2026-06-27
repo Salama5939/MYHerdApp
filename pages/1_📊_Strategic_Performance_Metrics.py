@@ -36,34 +36,36 @@ else:
 
 # 🔢 Calculations
 if not df_herd.empty:
-    # Ensure birth_date is a datetime object
-    df_herd["birth_date"] = pd.to_datetime(df_herd["birth_date"], errors="coerce")
+    # 1. CREATE ACTIVE HERD FILTER (Exclude Died)
+    # Using .copy() prevents 'SettingWithCopyWarning' later
+    active_df = df_herd[df_herd["status"] != "Died"].copy()
 
-    # 1. Identify Newborns (Born within the last 60 days)
+    # 2. Convert Dates and Identify Newborns (0-60 days)
+    active_df["birth_date"] = pd.to_datetime(active_df["birth_date"], errors="coerce")
     two_months_ago = datetime.now() - timedelta(days=60)
-    newborn_mask = df_herd["birth_date"] >= two_months_ago
 
-    newborn_count = len(df_herd[newborn_mask])
+    # Mask for newborns
+    is_newborn = active_df["birth_date"] >= two_months_ago
 
-    # 2. Get counts for all other categories (excluding newborns)
-    # The '~' symbol means 'NOT', so we filter for sheep NOT in the newborn mask
-    remaining_herd = df_herd[~newborn_mask]
-    category_counts = remaining_herd["category"].value_counts()
+    # Split the active herd into subsets
+    newborns_df = active_df[is_newborn]
+    others_df = active_df[~is_newborn]
+
+    # Get category counts for the 'Other' group only
+    category_counts = others_df["category"].value_counts()
 
     # 3. Display Metrics
-    st.subheader("Current Inventory Status")
+    st.subheader("Current Inventory Status (Living Herd)")
 
-    # Calculate columns: 1 (Total) + 1 (Newborns) + X (Rest of Categories)
+    # Total Columns: Total(1) + Newborns(1) + Categories(len)
     total_metrics = 2 + len(category_counts)
     all_cols = st.columns(total_metrics)
 
-    # Metric: Total
-    all_cols[0].metric("Total Herd", len(df_herd))
+    # Primary Metrics
+    all_cols[0].metric("Total Living", len(active_df))
+    all_cols[1].metric("Newborns (0-2m)", len(newborns_df))
 
-    # Metric: Newborns
-    all_cols[1].metric("Newborns (0-2m)", newborn_count)
-
-    # Metrics: Remaining Categories
+    # Category Metrics
     for i, (cat, count) in enumerate(category_counts.items()):
         all_cols[i + 2].metric(str(cat), count)
 
@@ -73,7 +75,7 @@ if not df_herd.empty:
     chart_col1, chart_col2 = st.columns(2)
 
     with chart_col1:
-        st.markdown("**Herd Structure (Excluding Newborns)**")
+        st.markdown("**Herd Structure (Excluding Newborns & Died)**")
         fig_bar = px.bar(
             category_counts.reset_index(),
             x="category",
@@ -84,7 +86,7 @@ if not df_herd.empty:
         st.plotly_chart(fig_bar, use_container_width=True)
 
     with chart_col2:
-        st.markdown("**Allocation Ratio (Excluding Newborns)**")
+        st.markdown("**Allocation Ratio (Excluding Newborns & Died)**")
         fig_pie = px.pie(
             category_counts.reset_index(),
             values="count",
