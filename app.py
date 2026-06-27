@@ -15,6 +15,14 @@ import requests  # Requests library for handling HTTP requests to Supabase stora
 import os  # OS library for file handling operations related to the feed inventory database file
 from working_before_merging_database import execute_custom_query
 
+from supabase import create_client, Client
+
+# Initialize the Supabase client
+# Make sure these match your specific setup (e.g., secrets from Streamlit)
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(url, key)
+
 # 🟢 This hides the sidebar on load and keeps it hidden
 st.set_page_config(
     page_title="myHerdApp", layout="wide", initial_sidebar_state="collapsed"
