@@ -2,13 +2,21 @@ import streamlit as st
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import pandas as pd
+import os
 from datetime import datetime
 from supabase import create_client, Client
 
-# Initialize the Supabase client
-# Make sure these match your specific setup (e.g., secrets from Streamlit)
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
+# 1. Try to get values from st.secrets (Local/Streamlit Cloud)
+# 2. If that fails, try to get values from Render Environment Variables (os.environ)
+url = st.secrets.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL")
+key = st.secrets.get("SUPABASE_KEY") or os.environ.get("SUPABASE_KEY")
+
+if not url or not key:
+    st.error(
+        "🚨 Configuration Error: SUPABASE_URL or SUPABASE_KEY not found in secrets or environment!"
+    )
+    st.stop()
+
 supabase: Client = create_client(url, key)
 
 

@@ -1,27 +1,11 @@
 # myHerdApp Engine - Comprehensive Herd Management Dashboard
-# This Streamlit application serves as the central control interface for managing a sheep farming operation,
-# integrating multiple modules for herd tracking, performance monitoring, and feed inventory management.
-# The app connects to a SQLite database for local data storage and synchronizes with Supabase for cloud backup
-# and multi-user access control.
-
-import streamlit as st  # Streamlit for interactive web app development
-import pandas as pd  # Pandas for data manipulation and analysis
-import plotly.express as px  # Plotly Express for advanced interactive visualizations
-import working_before_merging_database as db  # Connects directly to your database.py file, for all database interactions and operations
-from datetime import datetime, date  # For handling date inputs and formatting
-
-# import sqlite3 # SQLite3 for direct database connections and operations within the feed inventory module
-import requests  # Requests library for handling HTTP requests to Supabase storage for feed inventory synchronization
-import os  # OS library for file handling operations related to the feed inventory database file
-from working_before_merging_database import execute_custom_query
-
-from supabase import create_client, Client
-
-# Initialize the Supabase client
-# Make sure these match your specific setup (e.g., secrets from Streamlit)
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
-supabase: Client = create_client(url, key)
+# This is the main entry point for the myHerdApp application, designed to provide a secure, multi-user interface for managing herd data, performance metrics, and operational records. The application integrates with a cloud-based Supabase database for user authentication and data storage.
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import working_before_merging_database as db
+from datetime import datetime, date
+import os
 
 # 🟢 This hides the sidebar on load and keeps it hidden
 st.set_page_config(
