@@ -3,6 +3,10 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import pandas as pd
 from datetime import datetime
+import os  # OS library for file handling operations related to the feed inventory database file
+import working_before_merging_database as db  # Connects directly to your database.py file,
+
+# for all database interactions and operations
 
 
 def create_connection():
@@ -61,6 +65,7 @@ def init_db():
             lambs_count INTEGER NOT NULL,
             foster_ewe_tag TEXT,
             comments TEXT,
+            newborn_tag TEXT, -- 👈 Added this      
             FOREIGN KEY (ewe_tag_no) REFERENCES public.herd(tag_no) ON DELETE CASCADE
         );
     """)
@@ -75,6 +80,7 @@ def init_db():
             FOREIGN KEY (tag_no) REFERENCES public.herd(tag_no) ON DELETE CASCADE
         );
     """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.inventory (
             item_name TEXT PRIMARY KEY,
@@ -84,6 +90,7 @@ def init_db():
             is_active INTEGER NOT NULL DEFAULT 1
         );
     """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.feed_recipes (
             recipe_type TEXT PRIMARY KEY,
@@ -91,8 +98,9 @@ def init_db():
             recipe_breakdown TEXT DEFAULT ''
         );
     """)
-
+    # ================================================================
     # Finance Tables
+    # ================================================================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.chart_of_accounts (
             account_code INTEGER PRIMARY KEY,
@@ -100,6 +108,7 @@ def init_db():
             account_type TEXT NOT NULL
         );
     """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.batch_profitability_meta (
             batch_id TEXT PRIMARY KEY,
@@ -109,6 +118,7 @@ def init_db():
             status TEXT NOT NULL DEFAULT 'Active'
         );
     """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.financial_transactions (
             tx_id SERIAL PRIMARY KEY,
@@ -124,6 +134,7 @@ def init_db():
             FOREIGN KEY (batch_id_tag) REFERENCES public.batch_profitability_meta(batch_id) ON DELETE SET NULL
         );
     """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.capital_assets_depreciation (
             asset_id TEXT PRIMARY KEY,
@@ -233,30 +244,77 @@ def update_animal_category(tag_no, new_category):
     execute_custom_query(query, (new_category, tag_no), is_select=False)
 
 
-def register_birth_event(
-    ewe_tag, birth_date, lambs_count, foster_ewe=None, comments=""
+def register_birth_and_update_herd(
+    ewe_tag, birth_date, count, foster_val, comments, lambs_list
 ):
-    """Logs a successful lambing birth occurrence with optional foster/comment specs."""
-    query = """
-        INSERT INTO birth_records (ewe_tag_no, birth_date, lambs_count, foster_ewe_tag, comments)
-        VALUES (%s, %s, %s, %s, %s)
     """
-    execute_custom_query(
-        query, (ewe_tag, birth_date, lambs_count, foster_ewe, comments), is_select=False
-    )
+    lambs_list: A list of dictionaries, e.g.,
+    [{'tag': '123', 'cat': 'Small - Male'}, {'tag': '124', 'cat': 'Small - Female'}]
+    """
+    conn = get_supabase_connection()
+    cur = conn.cursor()
+    try:
+        # 1. Update Mother status
+        cur.execute(
+            "UPDATE public.herd SET category = 'Ewe' WHERE tag_no = %s", (ewe_tag,)
+        )
+
+        # 2. Insert Birth Record (Store all tags in comments or a new field)
+        tags_str = ", ".join([l["tag"] for l in lambs_list])
+        sql_birth = """
+        INSERT INTO public.birth_records (ewe_tag_no, birth_date, lambs_count, foster_ewe_tag, comments, newborn_tag)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        cur.execute(
+            sql_birth, (ewe_tag, birth_date, count, foster_val, comments, tags_str)
+        )
+
+        # 3. Create New Lamb Entries (Loop through all lambs)
+        sql_lamb = """
+        INSERT INTO public.herd (tag_no, category, status, birth_date, registration_date)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (tag_no) DO NOTHING
+        """
+        for lamb in lambs_list:
+            cur.execute(
+                sql_lamb,
+                (lamb["tag"], lamb["cat"], "Active/Healthy", birth_date, birth_date),
+            )
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cur.close()
+        conn.close()
 
 
-def log_growth_metrics_advanced(tag_no, weight, feed_kg, weigh_date, comments=""):
-    """Logs individual animal weight milestones and feed metrics with optional comments."""
-    query = """
-        INSERT INTO weight_logs (tag_no, weight_kg, feed_consumed_since_last_kg, weigh_date, comments)
-        VALUES (%s, %s, %s, %s, %s)
+def log_growth_metrics_advanced(
+    tag_no, weight, feed_kg, feed_cost, weigh_date, comments
+):
     """
-    execute_custom_query(
-        query,
-        (tag_no, float(weight), float(feed_kg), weigh_date, comments),
-        is_select=False,
-    )
+    Saves growth logs to the Supabase weight_logs table.
+    """
+    try:
+        # Create the data dictionary
+        # IMPORTANT: The keys (left side) MUST match your exact
+        # column names in the Supabase 'weight_logs' table.
+        data = {
+            "tag_no": tag_no,
+            "weight_kg": weight,
+            "feed_consumed_since_last_kg": feed_kg,  # Ensure this matches your DB column name
+            "feed_cost": feed_cost,  # <--- THIS IS THE NEW PART
+            "weigh_date": weigh_date,
+            "comments": comments,
+        }
+    # Instead of using the Supabase client library, we are now using psycopg2 to connect directly to the PostgreSQL database hosted on Supabase. This approach is more stable and avoids the complications that arose from using the Supabase client in a serverless environment like Streamlit Cloud.
+    # Insert into Supabase
+    #        response = supabase.table("weight_logs").insert(data).execute()
+    #        return response
+    except Exception as e:
+        print(f"Error logging metrics: {e}")
+        raise e
 
 
 def sell_or_slaughter_animal(tag_no, structural_status, sale_price=None, date_str=None):
@@ -403,3 +461,29 @@ def draw_home_button():
     # We use st.container to ensure it stays neatly at the top
     if st.button("⬅️ Return to Control Room"):
         st.switch_page("app.py")
+
+
+# This function updates a record in a specified table using a dynamic key column.
+
+
+def update_table_record(table_name, key_column, record_id, column_name, new_value):
+    """Updates a record using a dynamic key column."""
+    conn = get_supabase_connection()
+    cur = conn.cursor()
+    # Dynamic column names: We use the key_column provided by the UI
+    query = f"UPDATE public.{table_name} SET {column_name} = %s WHERE {key_column} = %s"
+    cur.execute(query, (new_value, record_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def delete_table_record(table_name, key_column, record_id):
+    """Deletes a record using a dynamic key column."""
+    conn = get_supabase_connection()
+    cur = conn.cursor()
+    query = f"DELETE FROM public.{table_name} WHERE {key_column} = %s"
+    cur.execute(query, (record_id,))
+    conn.commit()
+    cur.close()
+    conn.close()

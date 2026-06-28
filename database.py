@@ -2,22 +2,30 @@ import streamlit as st
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import pandas as pd
-import os
 from datetime import datetime
-from supabase import create_client, Client
+import os
+
+from streamlit import cursor
+import working_before_merging_database as db  # Connects directly to your database.py file,
+
+# for all database interactions and operations
+# =============================================
+# I stopped using the Supabase client library because it was causing issues with the Streamlit Cloud deployment. Instead, I am using psycopg2 to connect directly to the PostgreSQL database hosted on Supabase. This approach is more stable and avoids the complications that arose from using the Supabase client in a serverless environment like Streamlit Cloud.
+# from supabase import create_client, Client
 
 # 1. Try to get values from st.secrets (Local/Streamlit Cloud)
 # 2. If that fails, try to get values from Render Environment Variables (os.environ)
-url = st.secrets.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL")
-key = st.secrets.get("SUPABASE_KEY") or os.environ.get("SUPABASE_KEY")
+# url = st.secrets.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL")
+# key = st.secrets.get("SUPABASE_KEY") or os.environ.get("SUPABASE_KEY")
 
-if not url or not key:
-    st.error(
-        "🚨 Configuration Error: SUPABASE_URL or SUPABASE_KEY not found in secrets or environment!"
-    )
-    st.stop()
+# if not url or not key:
+#    st.error(
+#        "🚨 Configuration Error: SUPABASE_URL or SUPABASE_KEY not found in secrets or environment!"
+#    )
+#    st.stop()
 
-supabase: Client = create_client(url, key)
+# supabase: Client = create_client(url, key)
+# ============================================
 
 
 def create_connection():
@@ -92,6 +100,7 @@ def init_db():
             FOREIGN KEY (tag_no) REFERENCES public.herd(tag_no) ON DELETE CASCADE
         );
     """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.inventory (
             item_name TEXT PRIMARY KEY,
@@ -101,6 +110,7 @@ def init_db():
             is_active INTEGER NOT NULL DEFAULT 1
         );
     """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.feed_recipes (
             recipe_type TEXT PRIMARY KEY,
@@ -108,8 +118,9 @@ def init_db():
             recipe_breakdown TEXT DEFAULT ''
         );
     """)
-
+    # ==================================================================
     # Finance Tables
+    # ==================================================================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.chart_of_accounts (
             account_code INTEGER PRIMARY KEY,
@@ -117,6 +128,7 @@ def init_db():
             account_type TEXT NOT NULL
         );
     """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.batch_profitability_meta (
             batch_id TEXT PRIMARY KEY,
@@ -126,6 +138,7 @@ def init_db():
             status TEXT NOT NULL DEFAULT 'Active'
         );
     """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.financial_transactions (
             tx_id SERIAL PRIMARY KEY,
@@ -141,6 +154,7 @@ def init_db():
             FOREIGN KEY (batch_id_tag) REFERENCES public.batch_profitability_meta(batch_id) ON DELETE SET NULL
         );
     """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS public.capital_assets_depreciation (
             asset_id TEXT PRIMARY KEY,
@@ -321,10 +335,10 @@ def log_growth_metrics_advanced(
             "weigh_date": weigh_date,
             "comments": comments,
         }
-
-        # Insert into Supabase
-        response = supabase.table("weight_logs").insert(data).execute()
-        return response
+    # Instead of using the Supabase client library, we are now using psycopg2 to connect directly to the PostgreSQL database hosted on Supabase. This approach is more stable and avoids the complications that arose from using the Supabase client in a serverless environment like Streamlit Cloud.
+    # Insert into Supabase
+    #        response = supabase.table("weight_logs").insert(data).execute()
+    #        return response
     except Exception as e:
         print(f"Error logging metrics: {e}")
         raise e
@@ -484,6 +498,8 @@ def log_system_activity(
 # The values for the new value and primary key are passed as parameters to the execute_custom_query function,
 # which safely executes the query against the database.
 # This approach ensures that only the specified cell is updated without affecting the overall structure of the table or other records.
+
+
 def update_single_record(table_name, pk_column, pk_value, target_column, new_value):
     """Safely updates a single specific cell in the cloud database without destroying table structure."""
     # We dynamically insert the table and column names, but safely parameterize the values
@@ -499,14 +515,6 @@ def draw_home_button():
 
 
 # This function updates a record in a specified table using a dynamic key column.
-# It constructs an SQL UPDATE query based on the provided table name, key column, record ID, target column, and new value.
-# The function establishes a connection to the database, executes the query with parameterized values to prevent SQL injection, commits the changes, and closes the connection.
-# Methodology: The function uses f-strings to dynamically insert the table and column names into the SQL query.
-# The values for the new value and record ID are passed as parameters to the cursor's execute method,
-# which safely executes the query against the database.
-# This approach allows for flexible updates to records in different tables without hardcoding the table or column names, while ensuring data integrity and security.
-# Conclusion: The function provides a secure and efficient way to update records in the database,
-# accommodating various table structures and key columns as needed.
 
 
 def update_table_record(table_name, key_column, record_id, column_name, new_value):
