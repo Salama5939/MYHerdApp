@@ -1,7 +1,10 @@
+from datetime import date
 import sys
 import os
 import streamlit as st
 import pandas as pd
+
+# mport working_before_merging_database as db
 
 # 📂 Path setup to find your database.py file
 parent_dir = os.path.dirname(os.path.dirname(__file__))
@@ -272,7 +275,12 @@ with tab_purchase:
             stock_shift = st.number_input(
                 "Stock Volume Shift (+ Purchases, - Drawdowns):", step=50.0, value=0.0
             )
+
+            # 1. ADDED: Date Input
+            received_date = st.date_input("Transaction Date:", value=date.today())
+
         with col2:
+            # Logic to fetch existing cost
             current_cost_val = 15.0
             if chosen_stock_item and not df_active.empty:
                 match_row = df_active[df_active["item_name"] == chosen_stock_item]
@@ -286,14 +294,24 @@ with tab_purchase:
                 value=current_cost_val,
             )
 
+            # 2. ADDED: Comments field
+            comments = st.text_area("Observations/Notes:")
+
         if st.form_submit_button("Commit Movement Entry") and chosen_stock_item:
-            db.execute_custom_query(
-                "UPDATE inventory SET quantity_kg = quantity_kg + %s, cost_per_kg = %s WHERE item_name = %s",
-                (stock_shift, updated_cost, chosen_stock_item),
-                is_select=False,
-            )
-            st.success(f"Cloud Ledger updated for '{chosen_stock_item}'!")
-            st.rerun()
+            try:
+                # 3. UPDATED: Call your new unified database function
+                # This function MUST handle both updating 'inventory' and inserting into 'inventory_logs'
+                db.log_warehouse_movement(
+                    chosen_stock_item,
+                    stock_shift,
+                    updated_cost,
+                    received_date,
+                    comments,
+                )
+                st.success(f"Ledger and History updated for '{chosen_stock_item}'!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Transaction failed: {e}")
 
 with tab_modify:
     st.markdown("### Update Existing Commodity Configurations")

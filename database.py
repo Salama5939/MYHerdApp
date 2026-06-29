@@ -538,3 +538,40 @@ def delete_table_record(table_name, key_column, record_id):
     conn.commit()
     cur.close()
     conn.close()
+
+
+# Make sure this is in working_before_merging_database.py
+def log_warehouse_movement(
+    item_name, quantity_shift, unit_cost, received_date, comments
+):
+    """
+    Transactional function: Updates inventory balance AND logs history.
+    """
+    # Ensure get_supabase_connection() is available in this file
+    with get_supabase_connection() as conn:
+        with conn.cursor() as cur:
+            try:
+                # 1. Log the transaction (The History)
+                sql_log = """
+                    INSERT INTO inventory_logs (item_name, quantity_change, received_date, comments)
+                    VALUES (%s, %s, %s, %s);
+                """
+                cur.execute(
+                    sql_log, (item_name, quantity_shift, received_date, comments)
+                )
+
+                # 2. Update the current balance (The Inventory Table)
+                sql_update = """
+                    UPDATE inventory 
+                    SET quantity_kg = quantity_kg + %s,
+                        cost_per_kg = %s
+                    WHERE item_name = %s;
+                """
+                cur.execute(sql_update, (quantity_shift, unit_cost, item_name))
+
+                # Commit both actions together
+                conn.commit()
+                return True
+            except Exception as e:
+                conn.rollback()
+                raise e
