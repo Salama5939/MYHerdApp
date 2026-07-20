@@ -5,23 +5,27 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 
+# ===================================================
 # 📂 Path management
 parent_dir = os.path.dirname(os.path.dirname(__file__))
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
-
+# ===================================================
+# 🗃️ Database Import
 import working_before_merging_database as db
 
+# ===================================================
 # 🔒 SECURITY
 if "authenticated" not in st.session_state or not st.session_state.get(
     "authenticated", False
 ):
     st.warning("🔒 Access Denied. Please log in on the main Home Page first.")
     st.stop()
-
+# ===================================================
 st.title("Strategic Herd Performance & Summary Metrics")
-db.draw_home_button()
-st.markdown("---")
+db.draw_home_button()  # Draw Home Button
+st.markdown("---")  # Draw Horizontal Line
+# ===================================================
 
 # 🌾 Data Loading
 if "df_herd_cached" in st.session_state and st.session_state.df_herd_cached is not None:
@@ -33,14 +37,18 @@ else:
     except Exception as e:
         st.error(f"🚨 DATABASE CONNECTION ERROR: {e}")
         st.stop()
+# ===================================================
 
 # 🔢 Calculations
 if not df_herd.empty:
-    # 1. CREATE ACTIVE HERD FILTER (Exclude Died)
-    # Using .copy() prevents 'SettingWithCopyWarning' later
-    active_df = df_herd[df_herd["status"] != "Died"].copy()
+    # 1. DEFINE OFF-TAKE STATUSES (To be excluded from metrics)
+    excluded_statuses = ["Died", "Slaughtered", "Sold", "Zakate", "Donate"]
 
-    # 2. Convert Dates and Identify Newborns (0-60 days)
+    # 2. CREATE ACTIVE HERD FILTER
+    # The ~ operator means "NOT", so this keeps everything NOT in the excluded list
+    active_df = df_herd[~df_herd["status"].isin(excluded_statuses)].copy()
+
+    # 3. Convert Dates and Identify Newborns (0-60 days)
     active_df["birth_date"] = pd.to_datetime(active_df["birth_date"], errors="coerce")
     two_months_ago = datetime.now() - timedelta(days=60)
 
@@ -54,7 +62,7 @@ if not df_herd.empty:
     # Get category counts for the 'Other' group only
     category_counts = others_df["category"].value_counts()
 
-    # 3. Display Metrics
+    # 4. Display Metrics
     st.subheader("Current Inventory Status (Living Herd)")
 
     # Total Columns: Total(1) + Newborns(1) + Categories(len)
@@ -75,7 +83,7 @@ if not df_herd.empty:
     chart_col1, chart_col2 = st.columns(2)
 
     with chart_col1:
-        st.markdown("**Herd Structure (Excluding Newborns & Died)**")
+        st.markdown("**Herd Structure (Excluding Newborns & Off-Take)**")
         fig_bar = px.bar(
             category_counts.reset_index(),
             x="category",
@@ -83,10 +91,10 @@ if not df_herd.empty:
             color="category",
             color_discrete_sequence=px.colors.qualitative.Set1,
         )
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.plotly_chart(fig_bar, width="stretch")
 
     with chart_col2:
-        st.markdown("**Allocation Ratio (Excluding Newborns & Died)**")
+        st.markdown("**Allocation Ratio (Excluding Newborns & Off-Take)**")
         fig_pie = px.pie(
             category_counts.reset_index(),
             values="count",
@@ -94,6 +102,6 @@ if not df_herd.empty:
             hole=0.4,
             color_discrete_sequence=px.colors.qualitative.Pastel,
         )
-        st.plotly_chart(fig_pie, use_container_width=True)
+        st.plotly_chart(fig_pie, width="stretch")
 else:
     st.info("📂 No active herd logs found.")

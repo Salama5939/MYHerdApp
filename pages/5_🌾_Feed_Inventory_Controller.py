@@ -3,6 +3,8 @@ import sys
 import os
 import streamlit as st
 import pandas as pd
+sys.path.append(r"C:\Users\laphouse\MyHerdApp")
+import working_before_merging_database as db
 
 # mport working_before_merging_database as db
 
@@ -89,8 +91,87 @@ def get_saved_ratio_dynamic(recipe_type, item_name):
     return 0
 
 
+# --- FORECAST ENGINE ---
+def get_3_week_forecast():
+    # 1. Fetch data
+    df_herd = db.get_table_data("herd")
+    df_std = db.get_table_data("feeding_standards")
+    df_recipes = db.get_table_data("feed_recipes")
+    df_inv = db.get_table_data("inventory")
+
+    if df_herd.empty or df_std.empty or df_recipes.empty:
+        return None
+
+    # 2. DYNAMIC COUNTING (The Fix)
+    # We filter for Active/Healthy animals and group them by category
+    active_herd = df_herd[df_herd["status"] == "Active/Healthy"]
+    category_counts = active_herd.groupby("category").size()
+
+    recipe_map = {
+        "Pregnant": "General Herd",
+        "Ewes": "General Herd",
+        "Permanent Sire": "General Herd",
+        "(Small) (Female)": "General Herd",
+        "(Small) (Male)": "General Herd",
+        "Fattening": "Fattening",
+    }
+
+    ingredient_needs = {}
+
+    # 3. Calculation Loop (Iterating through the counted categories)
+    for cat, count in category_counts.items():
+
+        # Find daily ration
+        std_row = df_std[df_std["category"] == cat]
+        if std_row.empty:
+            continue
+        ration = float(std_row.iloc[0]["daily_ration_kg"])
+
+        # Find recipe using the map
+        target_recipe = recipe_map.get(str(cat), str(cat))
+        rec_row = df_recipes[df_recipes["recipe_type"] == target_recipe]
+        if rec_row.empty:
+            continue
+
+        breakdown = str(rec_row.iloc[0]["recipe_breakdown"])
+        total_21d_demand = count * ration * 21
+
+        # Parse ingredients
+        if ":" in breakdown:
+            parts = breakdown.split(";")
+            for part in parts:
+                if ":" in part:
+                    ing, pct = part.split(":")
+                    pct = float(pct) / 100
+                    ingredient_needs[ing.strip()] = ingredient_needs.get(
+                        ing.strip(), 0
+                    ) + (total_21d_demand * pct)
+
+    # 4. Create Forecast DataFrame
+    forecast_data = []
+    for ing, needed in ingredient_needs.items():
+        stock = 0.0
+        if not df_inv.empty and ing in df_inv["item_name"].values:
+            stock = float(df_inv[df_inv["item_name"] == ing]["quantity_kg"].values[0])
+
+        forecast_data.append(
+            {
+                "Ingredient": ing,
+                "Needed (21 Days)": round(needed, 2),
+                "Current Stock": round(stock, 2),
+                "Gap (To Purchase)": round(max(0, needed - stock), 2),
+            }
+        )
+
+    return pd.DataFrame(forecast_data)
+
+
 # --- DRAWING THE INTERACTIVE RECIPE SLIDER ENGAGEMENT DESK ---
-tab1, tab2 = st.tabs(["Fattening Formulation", "General Herd Formulation"])
+# tab1, tab2 = st.tabs(["Fattening Formulation", "General Herd Formulation"])
+
+tab1, tab2, tab_forecast = st.tabs(
+    ["Fattening Formulation", "General Herd Formulation", "📊 3-Week Forecast"]
+)
 
 # 🧪 TAB 1: FATTENING FORMULATION MATRIX
 with tab1:
@@ -199,6 +280,30 @@ with tab2:
                 st.rerun()
             except Exception as e:
                 st.error(f"Database Execution Error: {e}")
+
+# --- 3-WEEK FORECAST ---
+with tab_forecast:
+    st.markdown("### 📅 Demand vs. Stock Forecast (Next 21 Days)")
+    forecast_df = get_3_week_forecast()
+
+    if forecast_df is not None and not forecast_df.empty:
+        st.dataframe(forecast_df, width = "stretch")
+
+        for _, row in forecast_df.iterrows():
+            if row["Current Stock"] == 0 and row["Needed (21 Days)"] > 0:
+                st.error(
+                    f"🚨 ALERT: {row['Ingredient']} is completely OUT OF STOCK! Purchase **{row['Gap (To Purchase)']} kg** immediately."
+                )
+            elif row["Gap (To Purchase)"] > 0:
+                st.warning(
+                    f"⚠️ Need: {row['Gap (To Purchase)']} kg of {row['Ingredient']}."
+                )
+            else:
+                st.success(f"✅ {row['Ingredient']} stock is sufficient.")
+    else:
+        st.info(
+            "Ensure all herd groups have registered feeding standards and recipes to see the forecast."
+        )
 
 # --- SUB-PANEL B: ADVANCED WAREHOUSE INVENTORY MANAGEMENT DESK ---
 st.markdown("---")

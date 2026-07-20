@@ -61,7 +61,7 @@ with tab1:
             )
             status = st.selectbox(
                 "Current Operational Status Level:",
-                ["Active/Healthy", "Sold", "Slaughtered", "Died"],
+                ["Active/Healthy", "Sold", "Slaughtered", "Died", "Zakate", "Donate"],
             )
 
         with col2:
@@ -121,7 +121,7 @@ with tab2:
                 target_tag = st.selectbox("Select Target Ear Tag Code:", active_list)
                 target_action = st.selectbox(
                     "Select Exit Action Description:",
-                    ["Sold", "Slaughtered", "Died"],
+                    ["Sold", "Slaughtered", "Died", "Zakate", "Donate"],
                 )
                 sale_price = st.number_input(
                     "Observed Sale Price Value ($) - If applicable:",

@@ -1,4 +1,6 @@
 import streamlit as st
+import sys
+import os
 import pandas as pd
 import working_before_merging_database as db
 
@@ -17,6 +19,14 @@ table_choice = st.selectbox(
 
 # Determine the Primary Key for this table based on the selection
 current_pk = pk_map[table_choice]
+
+# ===================================================
+# 📂 Path management
+parent_dir = os.path.dirname(os.path.dirname(__file__))
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+# ===================================================
+
 
 # 3. Fetch Data
 try:

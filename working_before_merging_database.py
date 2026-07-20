@@ -65,8 +65,10 @@ def init_db():
             tag_no TEXT NOT NULL,
             weight_kg REAL NOT NULL,
             feed_consumed_since_last_kg REAL DEFAULT 0.0,
-            weigh_date TEXT NOT NULL,
+            weigh_date DATE NOT NULL, # Modified to DATE type for consistency
             comments TEXT,
+            entry_date DATE NOT NULL, # Added entry_date to track when the log was entered
+            feed_cost REAL DEFAULT 0.0, # Added feed_cost to track the cost of feed consumed
             FOREIGN KEY (tag_no) REFERENCES public.herd(tag_no) ON DELETE CASCADE
         );
     """)
@@ -96,6 +98,10 @@ def initialize_db():
     init_db()
 
 
+import streamlit as st
+
+
+@st.cache_data(ttl=60)  # This stores the data in memory for 60 seconds
 def get_table_data(table_name):
     """Retrieves records using public schema."""
     conn = (
@@ -237,42 +243,86 @@ def log_growth_metrics_advanced(
     tag_no, weight, feed_kg, feed_cost, weigh_date, comments
 ):
     """
-    Saves growth logs to the Supabase weight_logs table.
+    Inserts a new growth record including feed consumption and cost.
+    Ensures feed_kg maps to feed_consumed_since_last_kg column.
     """
-    try:
-        # Create the data dictionary
-        # IMPORTANT: The keys (left side) MUST match your exact
-        # column names in the Supabase 'weight_logs' table.
-        data = {
-            "tag_no": tag_no,
-            "weight_kg": weight,
-            "feed_consumed_since_last_kg": feed_kg,  # Ensure this matches your DB column name
-            "feed_cost": feed_cost,  # <--- THIS IS THE NEW PART
-            "weigh_date": weigh_date,
-            "comments": comments,
-        }
+    # 1. Define the SQL INSERT statement
+    # We now include feed_cost in both the column list and the values list
+    query = """
+        INSERT INTO weight_logs (
+            tag_no, 
+            weight_kg, 
+            feed_consumed_since_last_kg, 
+            feed_cost, 
+            weigh_date, 
+            comments,
+            entry_date
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s);
+    """
 
-        # Insert into Supabase
-        response = supabase.table("weight_logs").insert(data).execute()
-        return response
-    except Exception as e:
-        print(f"Error logging metrics: {e}")
-        raise e
+    # 2. Set the entry date to the current date
+    entry_date = datetime.now().date()
+
+    # 3. Define the data tuple
+    # The order MUST match the columns listed in the query above
+    params = (tag_no, weight, feed_kg, feed_cost, weigh_date, comments, entry_date)
+
+    # 4. Execute the command
+    execute_custom_query(query, params, is_select=False)
+
+
+def insert_weight_log(
+    tag_no, weight_kg, feed_kg, feed_cost, weigh_date, comments, entry_date
+):
+    # 7 arguments
+    query = """
+        INSERT INTO weight_logs (tag_no, weight_kg, feed_consumed_since_last_kg, feed_cost, weigh_date, comments, entry_date)
+        VALUES (%s, %s, %s, %s, %s, %s, %s);
+    """
+    params = (tag_no, weight_kg, feed_kg, feed_cost, weigh_date, comments, entry_date)
+    execute_custom_query(query, params, is_select=False)
+
+
+def update_weight_log(
+    log_id, tag_no, weight_kg, feed_kg, feed_cost, weigh_date, comments, entry_date
+):
+    # 8 arguments
+    query = """
+        UPDATE weight_logs 
+        SET tag_no = %s, weight_kg = %s, feed_consumed_since_last_kg = %s, 
+            feed_cost = %s, weigh_date = %s, comments = %s, entry_date = %s
+        WHERE id = %s;
+    """
+    params = (
+        tag_no,
+        weight_kg,
+        feed_kg,
+        feed_cost,
+        weigh_date,
+        comments,
+        entry_date,
+        log_id,
+    )
+    execute_custom_query(query, params, is_select=False)
 
 
 def sell_or_slaughter_animal(tag_no, structural_status, sale_price=None, date_str=None):
-    """Modifies an animal status to reflect an off-take exit event dynamically."""
-    if sale_price is not None and str(sale_price).strip() != "":
-        log_comment = f"Sold for ${sale_price}"
-        if date_str:
-            log_comment += f" on {date_str}"
-        # 🟢 Changed to %s for PostgreSQL
-        query = "UPDATE herd SET status = %s, comments = %s WHERE tag_no = %s"
+    """Modifies an animal status and updates financial records dynamically."""
+
+    # 1. Logic check: If a valid sale price (> 0) is provided, update financial columns
+    if sale_price is not None and float(sale_price) > 0:
+        # Update status AND financial data
+        query = """
+            UPDATE herd 
+            SET status = %s, sale_price = %s, sale_date = %s 
+            WHERE tag_no = %s
+        """
         execute_custom_query(
-            query, (structural_status, log_comment, tag_no), is_select=False
+            query, (structural_status, sale_price, date_str, tag_no), is_select=False
         )
     else:
-        # 🟢 Changed to %s for PostgreSQL
+        # No price provided (e.g., Status changed to "Died" or "Donate"),
+        # so just update the status without touching financial columns.
         query = "UPDATE herd SET status = %s WHERE tag_no = %s"
         execute_custom_query(query, (structural_status, tag_no), is_select=False)
 
@@ -403,7 +453,7 @@ def draw_home_button():
     """Renders a consistent 'Return to Dashboard' button."""
     # We use st.container to ensure it stays neatly at the top
     if st.button("⬅️ Return to Control Room"):
-        st.switch_page("app.py")
+        st.switch_page("pages/Dashboard.py")
 
 
 def update_table_record(table_name, key_column, record_id, column_name, new_value):
@@ -463,3 +513,28 @@ def log_warehouse_movement(
             except Exception as e:
                 conn.rollback()
                 raise e
+
+
+def draw_header_navigation():
+    """Draws the Home and Report buttons side-by-side."""
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("🏠 Control Room"):
+            st.switch_page("app.py")  # Ensure this matches your home file name
+    # ========================
+    # with col2:
+    #    if st.button("📊 Performance Report"):
+    #        st.switch_page("7_📈_Performance_Report.py")
+
+
+# Add this to working_before_merging_database.py
+
+
+def get_excluded_statuses():
+    """Returns the list of statuses that should be excluded from active herd counts."""
+    return ["Died", "Slaughtered", "Sold", "Zakate", "Donate"]
+
+
+def is_active(status):
+    """Utility to check if an animal is active."""
+    return status not in get_excluded_statuses()
