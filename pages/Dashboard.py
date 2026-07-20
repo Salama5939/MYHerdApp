@@ -10,7 +10,7 @@ st.set_page_config(page_title="Dashboard", layout="wide")
 # Force authentication check
 if not st.session_state.get("authenticated", False):
     st.warning("🔒 Access Denied. Please log in.")
-    st.switch_page("Home.py")
+    st.switch_page("app.py")
 
 
 st.title("Jalila's Farm Control Center")
@@ -96,4 +96,4 @@ with col6:
 
 if st.button("Logout"):
     st.session_state.authenticated = False
-    st.switch_page("Home.py")
+    st.switch_page("app.py")

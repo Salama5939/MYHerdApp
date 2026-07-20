@@ -96,4 +96,4 @@ with col6:
 
 if st.button("Logout"):
     st.session_state.authenticated = False
-    st.switch_page("Home.py")
+    st.switch_page("app.py")
