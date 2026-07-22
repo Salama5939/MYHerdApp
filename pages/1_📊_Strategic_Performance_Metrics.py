@@ -11,18 +11,23 @@ parent_dir = os.path.dirname(os.path.dirname(__file__))
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 # ===================================================
-# 🗃️ Database Import
-import working_before_merging_database as db
+# 🗃️ Database Import & Translations
+import database as db
+from translations import init_language_state, t, apply_rtl_styling
 
 # ===================================================
-# 🔒 SECURITY
+# 🔒 SECURITY & LANGUAGE INITIALIZATION
 if "authenticated" not in st.session_state or not st.session_state.get(
     "authenticated", False
 ):
     st.warning("🔒 Access Denied. Please log in on the main Home Page first.")
     st.stop()
+
+init_language_state()
+apply_rtl_styling()
 # ===================================================
-st.title("Strategic Herd Performance & Summary Metrics")
+
+st.title(t("nav_1"))  # Strategic Metrics title
 db.draw_home_button()  # Draw Home Button
 st.markdown("---")  # Draw Horizontal Line
 # ===================================================
@@ -45,7 +50,6 @@ if not df_herd.empty:
     excluded_statuses = ["Died", "Slaughtered", "Sold", "Zakate", "Donate"]
 
     # 2. CREATE ACTIVE HERD FILTER
-    # The ~ operator means "NOT", so this keeps everything NOT in the excluded list
     active_df = df_herd[~df_herd["status"].isin(excluded_statuses)].copy()
 
     # 3. Convert Dates and Identify Newborns (0-60 days)
@@ -63,45 +67,65 @@ if not df_herd.empty:
     category_counts = others_df["category"].value_counts()
 
     # 4. Display Metrics
-    st.subheader("Current Inventory Status (Living Herd)")
+    def safe_t(key: str, default: str) -> str:
+        return str(t(key) or default)
+
+    st.subheader(
+        safe_t("current_inventory_status", "Current Inventory Status (Living Herd)")
+    )
 
     # Total Columns: Total(1) + Newborns(1) + Categories(len)
     total_metrics = 2 + len(category_counts)
     all_cols = st.columns(total_metrics)
 
     # Primary Metrics
-    all_cols[0].metric("Total Living", len(active_df))
-    all_cols[1].metric("Newborns (0-2m)", len(newborns_df))
+    all_cols[0].metric(safe_t("total_living", "Total Living"), len(active_df))
+    all_cols[1].metric(safe_t("newborns_label", "Newborns (0-2m)"), len(newborns_df))
 
-    # Category Metrics
+    # Helper dictionary for translations if Arabic is active
+    is_arabic = st.session_state.get("language", "English") == "العربية (Arabic)"
+    from translations import TRANSLATIONS
+
+    ar_dict = TRANSLATIONS.get("العربية (Arabic)", {})
+
+    # Category Metrics (Translate category names if Arabic is active)
     for i, (cat, count) in enumerate(category_counts.items()):
-        all_cols[i + 2].metric(str(cat), count)
+        display_cat = ar_dict.get(str(cat), str(cat)) if is_arabic else str(cat)
+        all_cols[i + 2].metric(display_cat, count)
 
     st.markdown("---")
-    st.markdown("### 📊 Structural Population Breakdowns")
+    st.markdown(f"### {t('structural_breakdowns')}")
 
     chart_col1, chart_col2 = st.columns(2)
 
+    # Prepare DataFrame for charts with translated categories if Arabic
+    chart_df = category_counts.reset_index()
+    if is_arabic:
+        chart_df["display_category"] = (
+            chart_df["category"].map(ar_dict).fillna(chart_df["category"])
+        )
+        cat_column = "display_category"
+    else:
+        cat_column = "category"
+
     with chart_col1:
-        st.markdown("**Herd Structure (Excluding Newborns & Off-Take)**")
+        st.markdown(t("herd_structure_title"))
         fig_bar = px.bar(
-            category_counts.reset_index(),
-            x="category",
+            chart_df,
+            x=cat_column,
             y="count",
-            color="category",
+            color=cat_column,
             color_discrete_sequence=px.colors.qualitative.Set1,
         )
-        st.plotly_chart(fig_bar, width="stretch")
+        st.plotly_chart(fig_bar, use_container_width=True)
 
     with chart_col2:
-        st.markdown("**Allocation Ratio (Excluding Newborns & Off-Take)**")
+        st.markdown(t("allocation_ratio_title"))
         fig_pie = px.pie(
-            category_counts.reset_index(),
+            chart_df,
             values="count",
-            names="category",
+            names=cat_column,
             hole=0.4,
             color_discrete_sequence=px.colors.qualitative.Pastel,
         )
-        st.plotly_chart(fig_pie, width="stretch")
-else:
-    st.info("📂 No active herd logs found.")
+        st.plotly_chart(fig_pie, use_container_width=True)

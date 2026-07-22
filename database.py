@@ -453,7 +453,7 @@ def draw_home_button():
     """Renders a consistent 'Return to Dashboard' button."""
     # We use st.container to ensure it stays neatly at the top
     if st.button("⬅️ Return to Control Room"):
-        st.switch_page("app.py")
+        st.switch_page("Dashboard.py")
 
 
 def update_table_record(table_name, key_column, record_id, column_name, new_value):
@@ -520,7 +520,7 @@ def draw_header_navigation():
     col1, col2 = st.columns([1, 1])
     with col1:
         if st.button("🏠 Control Room"):
-            st.switch_page("app.py")  # Ensure this matches your home file name
+            st.switch_page("Dashboard.py")  # Ensure this matches your home file name
     with col2:
         if st.button("📊 Performance Report"):
             st.switch_page("7_📈_Performance_Report.py")

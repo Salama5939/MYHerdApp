@@ -2,14 +2,32 @@ import streamlit as st
 import sys
 import os
 
+# 🖥️ Force Wide Layout to use full screen space
+st.set_page_config(page_title="Growth Performance Logs", layout="wide")
+
 # This line finds the folder where the current file is located automatically
 current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir)
-# sys.path.append(r"C:\Users\laphouse\MyHerdApp")
-import working_before_merging_database as db
-import pandas as pd
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
 
-st.title("⚖️ Growth Performance Logs")
+import database as db
+import pandas as pd
+from translations import init_language_state, t, apply_rtl_styling
+
+# 🔒 SECURITY ACCESS LOCK & LANGUAGE INITIALIZATION
+if "authenticated" not in st.session_state or not st.session_state.get(
+    "authenticated", False
+):
+    st.warning("🔒 Access Denied. Please log in on the main Home Page first.")
+    st.stop()
+
+init_language_state()
+apply_rtl_styling()
+
+is_arabic = st.session_state.get("language", "English") == "العربية (Arabic)"
+
+st.title(t("nav_4"))
 db.draw_home_button()
 
 ## 1. Fetch and Prepare Data
@@ -25,19 +43,26 @@ if not df_weights.empty:
     # -------------------------
 
 # 2. THE EDITOR
-st.subheader("Edit Logs Directly")
+edit_logs_title = "Edit Logs Directly" if not is_arabic else "تعديل السجلات مباشرة"
+st.subheader(edit_logs_title)
+
 edited_df = st.data_editor(
     df_weights,
     num_rows="dynamic",
-    width="stretch",
+    use_container_width=True,
     column_config={"id": st.column_config.NumberColumn("ID", disabled=True)},
 )
 
-
 # 3. SAVE CHANGES (The Logic)
-if st.button("💾 Save Changes to Database"):
+save_btn_label = (
+    "💾 Save Changes to Database"
+    if not is_arabic
+    else "💾 حفظ التغييرات في قاعدة البيانات"
+)
+if st.button(save_btn_label):
     try:
-        with st.spinner("Processing..."):
+        spinner_text = "Processing..." if not is_arabic else "جاري المعالجة..."
+        with st.spinner(spinner_text):
             for i, row in edited_df.iterrows():
                 # Helper function to extract numbers safely
                 def safe_float(val):
@@ -81,7 +106,13 @@ if st.button("💾 Save Changes to Database"):
                         e_date,
                     )
 
-        st.success("✅ Database Updated Successfully!")
+        success_text = (
+            "✅ Database Updated Successfully!"
+            if not is_arabic
+            else "✅ تم تحديث قاعدة البيانات بنجاح!"
+        )
+        st.success(success_text)
         st.rerun()
     except Exception as e:
-        st.error(f"Save Failed: {e}")
+        fail_text = f"Save Failed: {e}" if not is_arabic else f"فشل الحفظ: {e}"
+        st.error(fail_text)
