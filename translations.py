@@ -127,17 +127,32 @@ def t(text_key):
 
 
 def apply_rtl_styling():
-    """Injects custom CSS to handle Right-to-Left layout if Arabic is selected."""
-    lang = st.session_state.get("language", "English")
-    if lang == "العربية (Arabic)":
+    """Applies Right-to-Left (RTL) layout and right-aligns all titles and text when Arabic is active."""
+    current_lang = st.session_state.get("language", "English")
+    if current_lang == "العربية (Arabic)":
         st.markdown(
             """
             <style>
+                /* Force global RTL direction */
                 .stApp {
                     direction: rtl;
                     text-align: right;
                 }
-                [data-testid="stSidebar"] {
+                
+                /* Force all titles, headers, and markdown text to align right */
+                h1, h2, h3, h4, h5, h6, p, span, label, .stMarkdown, .stText {
+                    text-align: right !important;
+                    direction: rtl;
+                }
+
+                /* Ensure metric cards and tables align correctly */
+                [data-testid="stMetricValue"], [data-testid="stMetricLabel"] {
+                    direction: rtl;
+                    text-align: right;
+                }
+                
+                /* Adjust selectboxes and input labels */
+                .stSelectbox label, .stTextInput label, .stDateInput label, .stNumberInput label {
                     direction: rtl;
                     text-align: right;
                 }
