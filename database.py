@@ -534,3 +534,183 @@ def get_excluded_statuses():
 def is_active(status):
     """Utility to check if an animal is active."""
     return status not in get_excluded_statuses()
+
+
+# ==========================================
+# CUSTOMER & CUTTING ORDERS HELPERS
+# ==========================================
+
+
+def get_or_create_customer(supabase, name, mobile, address, contact_name):
+    """Checks if a customer exists by mobile number. If yes, returns their ID. If no, creates them."""
+    try:
+        # Check if customer exists
+        response = (
+            supabase.table("customers")
+            .select("customer_id")
+            .eq("mobile_number", mobile)
+            .execute()
+        )
+        if response.data and len(response.data) > 0:
+            return response.data[0]["customer_id"]
+
+        # If not, insert new customer
+        new_customer = {
+            "customer_name": name,
+            "mobile_number": mobile,
+            "address": address,
+            "contact_name": contact_name,
+        }
+        insert_res = supabase.table("customers").insert(new_customer).execute()
+        if insert_res.data:
+            return insert_res.data[0]["customer_id"]
+    except Exception as e:
+        print(f"Error in get_or_create_customer: {e}")
+    return None
+
+
+def save_cutting_order(
+    supabase,
+    customer_id,
+    delivery_datetime,
+    target_box_weight,
+    special_instructions,
+    parts_dict,
+):
+    """Saves a new cutting order along with the 12-part checklist booleans."""
+    try:
+        order_data = {
+            "customer_id": customer_id,
+            "delivery_datetime": str(delivery_datetime),
+            "target_box_weight_kg": target_box_weight,
+            "special_instructions": special_instructions,
+            "status": "Pending",
+            **parts_dict,  # Unpacks the 12 part checkboxes (e.g., part_head=True/False, etc.)
+        }
+        response = supabase.table("cutting_orders").insert(order_data).execute()
+        return response.data is not None
+    except Exception as e:
+        print(f"Error in save_cutting_order: {e}")
+        return False
+
+
+# ==========================================
+# BUTCHER & PERFORMANCE HELPERS
+# ==========================================
+
+
+def get_all_butchers(supabase):
+    """Fetches all active butchers from the database."""
+    try:
+        response = (
+            supabase.table("butchers").select("*").eq("is_active", True).execute()
+        )
+        return response.data if response.data else []
+    except Exception as e:
+        print(f"Error fetching butchers: {e}")
+        return []
+
+
+def log_butcher_performance(
+    supabase,
+    butcher_id,
+    order_id,
+    work_date,
+    shift_hours,
+    task_role,
+    units_completed,
+    notes,
+):
+    """Logs daily or hourly butcher performance metrics."""
+    try:
+        log_data = {
+            "butcher_id": butcher_id,
+            "order_id": order_id if order_id else None,
+            "work_date": str(work_date),
+            "shift_hours": shift_hours,
+            "task_role": task_role,  # 'Slaughtering' or 'Cutting'
+            "units_completed": units_completed,
+            "performance_notes": notes,
+        }
+        response = supabase.table("butcher_performance_logs").insert(log_data).execute()
+        return response.data is not None
+    except Exception as e:
+        print(f"Error logging butcher performance: {e}")
+        return False
+
+
+def get_all_cutting_orders(supabase):
+    """Fetches all cutting orders."""
+    try:
+        response = (
+            supabase.table("cutting_orders")
+            .select("*")
+            .order("created_at", desc=True)
+            .limit(20)
+            .execute()
+        )
+        return response.data if response.data else []
+    except Exception as e:
+        print(f"Error fetching cutting orders: {e}")
+        return []
+
+
+def get_customers_lookup(supabase):
+    """Fetches a dictionary map of customers for quick lookup."""
+    try:
+        response = (
+            supabase.table("customers")
+            .select("customer_id, customer_name, mobile_number")
+            .execute()
+        )
+        return {c["customer_id"]: c for c in response.data} if response.data else {}
+    except Exception as e:
+        print(f"Error fetching customers lookup: {e}")
+        return {}
+
+
+def update_order_status_db(supabase, order_id, new_status):
+    """Updates a cutting order status."""
+    try:
+        response = (
+            supabase.table("cutting_orders")
+            .update({"status": new_status})
+            .eq("order_id", order_id)
+            .execute()
+        )
+        return response.data is not None
+    except Exception as e:
+        print(f"Error updating order status: {e}")
+        return False
+
+
+def get_all_performance_logs(supabase):
+    """Fetches recent butcher performance logs."""
+    try:
+        response = (
+            supabase.table("butcher_performance_logs")
+            .select("*")
+            .order("work_date", desc=True)
+            .limit(15)
+            .execute()
+        )
+        return response.data if response.data else []
+    except Exception as e:
+        print(f"Error fetching performance logs: {e}")
+        return []
+
+
+def get_butchers_lookup(supabase):
+    """Fetches a dictionary map of butchers for quick lookup."""
+    try:
+        response = (
+            supabase.table("butchers").select("butcher_id, butcher_name").execute()
+        )
+        return (
+            {b["butcher_id"]: b["butcher_name"] for b in response.data}
+            if response.data
+            else {}
+        )
+    except Exception as e:
+        print(f"Error fetching butchers lookup: {e}")
+        return {}
