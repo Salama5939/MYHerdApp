@@ -1,2 +1,34 @@
+# Sensitive Information (DO NOT PUSH)
+.streamlit/secrets.toml
+
+# Ignore local database storage files
+*.db
+*.sqlite3
+
+# Ignore temporary Python environment caches
+__pycache__/
+*.pyc
+
+# Ignore secret credentials or local environment settings
+.env
+
+# Ignore temporary log files or operating system thumbnails
+*.log
+Thumbs.db
+.DS_Store
+
+*.docx
+
+*.pptx
+
+farm_finance.db
+
 herd_management.db
-.streamlit/
+
+.Backups/
+
+*.pdf
+
+*.csv
+
+

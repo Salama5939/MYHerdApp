@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 import sys
 import os
 import streamlit as st
@@ -25,24 +25,27 @@ apply_rtl_styling()
 
 is_arabic = st.session_state.get("language", "English") == "العربية (Arabic)"
 
-st.title(t("nav_5"))
+st.title(
+    t("nav_5")
+    if "nav_5" in st.session_state.get("translations", {})
+    else ("Feed Inventory Controller" if not is_arabic else "متحكم مخزون الأعلاف")
+)
 
 # 🟢 Add Home Button
 db.draw_home_button()
 
 st.markdown("---")
 st.subheader(
-    "🧪 Interactive Feed Recipe Cost Formulation Desks"
+    "📦 Flow-Based Warehouse Inventory & Category Consumption Control"
     if not is_arabic
-    else "🧪 مكاتب صياغة تكلفة وصفات الأعلاف التفاعلية"
+    else "📦 تحكم مخزون المستودع القائم على التدفق واستهلاك الفئات"
 )
 
 # ⚡ LIVE CLOUD DATA EXTRACTION
 try:
     df_inv = db.get_table_data("inventory")
+    df_logs = db.get_table_data("inventory_logs")
     df_recipes = db.get_table_data("feed_recipes")
-
-    # Update session cache for the dynamic sliders
     st.session_state.cached_recipes = df_recipes
 except Exception as e:
     st.error(
@@ -51,6 +54,7 @@ except Exception as e:
         else f"خطأ في الاتصال بالسحاب: {e}"
     )
     df_inv = pd.DataFrame()
+    df_logs = pd.DataFrame()
     df_recipes = pd.DataFrame()
 
 # --- SETUP LIVE RENDER OBJECTS ---
@@ -63,20 +67,8 @@ else:
 
 active_item_options = df_active["item_name"].tolist() if not df_active.empty else []
 
-if df_inv.empty:
-    st.warning(
-        "⚠️ Feed stock database is currently empty. Please register your first commodity record below!"
-        if not is_arabic
-        else "⚠️ قاعدة بيانات مخزون الأعلاف فارغة حالياً. يرجى تسجيل سجل السلعة الأول أدناه!"
-    )
-    df_active_sliders = pd.DataFrame()
-else:
-    df_active_sliders = df_active
-
-# Create ingredient price map dynamically
 price_lookup = {
-    row["item_name"]: float(row["cost_per_kg"])
-    for _, row in df_active_sliders.iterrows()
+    row["item_name"]: float(row["cost_per_kg"]) for _, row in df_active.iterrows()
 }
 
 cost_summary = " | ".join(
@@ -88,7 +80,6 @@ if cost_summary:
     )
 
 
-# Helper function to decode values stored in the breakdown column
 def get_saved_ratio_dynamic(recipe_type, item_name):
     cached_df = st.session_state.get("cached_recipes", pd.DataFrame())
     if not cached_df.empty:
@@ -108,7 +99,6 @@ def get_saved_ratio_dynamic(recipe_type, item_name):
     return 0
 
 
-# --- FORECAST ENGINE ---
 def get_3_week_forecast():
     df_herd = db.get_table_data("herd")
     df_std = db.get_table_data("feeding_standards")
@@ -178,172 +168,298 @@ def get_3_week_forecast():
     return pd.DataFrame(forecast_data)
 
 
-# --- DRAWING THE INTERACTIVE RECIPE SLIDER ENGAGEMENT DESK ---
-tab1_label = "Fattening Formulation" if not is_arabic else "تركيبة التسمين"
-tab2_label = "General Herd Formulation" if not is_arabic else "تركيبة القطيع العام"
-tab3_label = "📊 3-Week Forecast" if not is_arabic else "📊 توقعات 3 أسابيع"
+# --- NAVIGATION TABS ---
+tab_receive_label = "📥 Supplier Receiving" if not is_arabic else "📥 استلام الموردين"
+tab_withdraw_label = "📤 Category Withdrawal" if not is_arabic else "📤 سحب الفئات"
+tab_stock_label = (
+    "📊 Stock & Forecast Dashboard" if not is_arabic else "📊 لوحة المخزون والتوقعات"
+)
+tab_mgmt_label = (
+    "✏️ Catalog & Item Management" if not is_arabic else "✏️ إدارة الكتالوج والأصناف"
+)
+tab_ref_label = (
+    "📋 Recipe Ratios (Reference)" if not is_arabic else "📋 نسب الوصفات (مرجع)"
+)
+tab_reports_label = "📑 Reports & Vouchers" if not is_arabic else "📑 التقارير والسندات"
 
-tab1, tab2, tab_forecast = st.tabs([tab1_label, tab2_label, tab3_label])
+tab_receive, tab_withdraw, tab_stock, tab_mgmt, tab_ref, tab_reports = st.tabs(
+    [
+        tab_receive_label,
+        tab_withdraw_label,
+        tab_stock_label,
+        tab_mgmt_label,
+        tab_ref_label,
+        tab_reports_label,
+    ]
+)
 
-# 🧪 TAB 1: FATTENING FORMULATION MATRIX
-with tab1:
+# 📥 TAB 1: SUPPLIER RECEIVING FORM (INBOUND)
+with tab_receive:
     st.markdown(
-        "#### "
+        "### "
         + (
-            "Adjust Fattening Ingredient Ratios (%)"
+            "Log Inbound Supplier Shipment"
             if not is_arabic
-            else "ضبط نسب مكونات التسمين (%)"
+            else "تسجيل شحنة المورد الواردة"
         )
     )
-    ratios_fattening = {}
-    for _, row in df_active_sliders.iterrows():
-        ing_name = row["item_name"]
-        default_val = get_saved_ratio_dynamic("Fattening", ing_name)
-        ratios_fattening[ing_name] = st.slider(
-            f"{'Ratio for' if not is_arabic else 'نسبة'} {ing_name} (%)",
-            0,
-            100,
-            default_val,
-            key=f"fattening_slide_{ing_name}",
-        )
-
-    total_fattening = sum(ratios_fattening.values())
-    st.metric(
-        "Total Formulation Sum:" if not is_arabic else "إجمالي مجموع التركيبة:",
-        f"{total_fattening} %",
-    )
-
-    blend_cost_fattening = sum(
-        (ratios_fattening[name] / 100.0) * price_lookup[name]
-        for name in ratios_fattening
-    )
-    st.info(
-        f"**{'Calculated Blended Fattening Feed Cost:' if not is_arabic else 'تكلفة علف التسمين المخلوط المحسوبة:'}** $ {blend_cost_fattening:.2f} per kg"
-    )
-
-    if st.button(
-        (
-            "Save Fattening Blend Specification Parameters"
-            if not is_arabic
-            else "حفظ مواصفات خليط التسمين"
-        ),
-        key="save_fattening_btn",
-    ):
-        if total_fattening != 100:
-            st.error(
-                "Ratios must sum to exactly 100% before saving."
-                if not is_arabic
-                else "يجب أن تكون النسبة المئوية الإجمالية مساوية لـ 100% تماماً قبل الحفظ."
+    with st.form(key="supplier_receiving_form"):
+        col_rec1, col_rec2 = st.columns(2)
+        with col_rec1:
+            received_date = st.date_input(
+                "1. Date Received:" if not is_arabic else "1. تاريخ الاستلام:",
+                value=date.today(),
             )
-        else:
-            breakdown_str = ";".join([f"{k}:{v}" for k, v in ratios_fattening.items()])
-            try:
-                query = """
-                    INSERT INTO feed_recipes (recipe_type, calculated_mix_cost_per_kg, recipe_breakdown) 
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (recipe_type) 
-                    DO UPDATE SET 
-                        calculated_mix_cost_per_kg = EXCLUDED.calculated_mix_cost_per_kg,
-                        recipe_breakdown = EXCLUDED.recipe_breakdown;
-                """
-                db.execute_custom_query(
-                    query,
-                    ("Fattening", blend_cost_fattening, breakdown_str),
-                    is_select=False,
-                )
-                st.success(
-                    "Fattening feed parameters committed successfully to the cloud!"
-                    if not is_arabic
-                    else "تم حفظ معاملات علف التسمين بنجاح في السحاب!"
-                )
-                st.rerun()
-            except Exception as e:
-                st.error(
-                    f"Database Execution Error: {e}"
-                    if not is_arabic
-                    else f"خطأ في تنفيذ قاعدة البيانات: {e}"
-                )
 
-# 🧪 TAB 2: GENERAL HERD FORMULATION MATRIX
-with tab2:
+            supplier_options = [
+                "Local Grain Supplier",
+                "Agricultural Development Co.",
+                "El-Wadi Feed Corp",
+                "Direct Farm Producer",
+                "Other Supplier",
+            ]
+            chosen_supplier = st.selectbox(
+                "2. Supplier:" if not is_arabic else "2. المورد:", supplier_options
+            )
+
+            target_ingredient = st.selectbox(
+                (
+                    "3. Target Feed Ingredient:"
+                    if not is_arabic
+                    else "3. مكون العلف المستهدف:"
+                ),
+                (
+                    active_item_options
+                    if active_item_options
+                    else ["No active items found"]
+                ),
+            )
+
+        with col_rec2:
+            qty_received = st.number_input(
+                (
+                    "4. Quantity Received by kg:"
+                    if not is_arabic
+                    else "4. الكمية المستلمة بالكجم:"
+                ),
+                min_value=0.0,
+                step=100.0,
+                value=1000.0,
+            )
+
+            default_item_cost = price_lookup.get(target_ingredient, 15.0)
+            purchased_price_per_kg = st.number_input(
+                (
+                    "5. Purchased Price per kg ($):"
+                    if not is_arabic
+                    else "5. سعر الشراء لكل كجم ($):"
+                ),
+                min_value=0.0,
+                step=0.1,
+                value=default_item_cost,
+            )
+
+            calculated_total_price = qty_received * purchased_price_per_kg
+            st.metric(
+                (
+                    "6. Calculated Total Purchase Price ($):"
+                    if not is_arabic
+                    else "6. إجمالي سعر الشراء المحسوب ($):"
+                ),
+                f"$ {calculated_total_price:,.2f}",
+            )
+
+        comments_rec = st.text_input(
+            "Receipt Notes / Invoice Reference:"
+            if not is_arabic
+            else "ملاحظات الاستلام / مرجع الفاتورة:"
+        )
+
+        submit_receiving = st.form_submit_button(
+            "Commit Receiving Shipment" if not is_arabic else "اعتماد شحنة الاستلام"
+        )
+
+        if submit_receiving:
+            if not target_ingredient or target_ingredient == "No active items found":
+                st.error(
+                    "Please select a valid target feed ingredient."
+                    if not is_arabic
+                    else "يرجى اختيار مكون علف مستهدف صالح."
+                )
+            elif qty_received <= 0:
+                st.error(
+                    "Quantity received must be greater than zero."
+                    if not is_arabic
+                    else "يجب أن تكون الكمية المستلمة أكبر من الصفر."
+                )
+            else:
+                try:
+                    comment_text = f"Supplier: {chosen_supplier} | Total: ${calculated_total_price:,.2f} | {comments_rec}".strip()
+                    db.log_warehouse_movement(
+                        item_name=target_ingredient,
+                        quantity_shift=qty_received,
+                        unit_cost=purchased_price_per_kg,
+                        received_date=received_date,
+                        comments=comment_text,
+                    )
+                    st.success(
+                        f"🎉 Successfully received {qty_received:,.2f} kg of {target_ingredient} from {chosen_supplier}!"
+                        if not is_arabic
+                        else f"🎉 تم استلام {qty_received:,.2f} كجم من {target_ingredient} بنجاح من {chosen_supplier}!"
+                    )
+                    st.rerun()
+                except Exception as e:
+                    st.error(
+                        f"Database error during receiving: {e}"
+                        if not is_arabic
+                        else f"خطأ في قاعدة البيانات أثناء الاستلام: {e}"
+                    )
+
+# 📤 TAB 2: CATEGORY WITHDRAWAL FORM (OUTBOUND)
+with tab_withdraw:
     st.markdown(
-        "#### "
+        "### "
         + (
-            "Adjust General Herd Ingredient Ratios (%)"
+            "Log Daily Category Consumption & Withdrawal"
             if not is_arabic
-            else "ضبط نسب مكونات القطيع العام (%)"
+            else "تسجيل الاستهلاك اليومي وسحب الفئات"
         )
     )
-    ratios_general = {}
-    for _, row in df_active_sliders.iterrows():
-        ing_name = row["item_name"]
-        default_val = get_saved_ratio_dynamic("General Herd", ing_name)
-        ratios_general[ing_name] = st.slider(
-            f"{'Ratio for' if not is_arabic else 'نسبة'} {ing_name} (%)",
-            0,
-            100,
-            default_val,
-            key=f"general_slide_{ing_name}",
-        )
-
-    total_general = sum(ratios_general.values())
-    st.metric(
-        "Total Formulation Sum:" if not is_arabic else "إجمالي مجموع التركيبة:",
-        f"{total_general} %",
-    )
-
-    blend_cost_general = sum(
-        (ratios_general[name] / 100.0) * price_lookup[name] for name in ratios_general
-    )
-    st.info(
-        f"**{'Calculated Blended General Feed Cost:' if not is_arabic else 'تكلفة العلف المخلوط للقطيع العام المحسوبة:'}** $ {blend_cost_general:.2f} per kg"
-    )
-
-    if st.button(
-        (
-            "Save General Herd Blend Specification Parameters"
-            if not is_arabic
-            else "حفظ مواصفات خليط القطيع العام"
-        ),
-        key="save_general_btn",
-    ):
-        if total_general != 100:
-            st.error(
-                "Ratios must sum to exactly 100% before saving."
-                if not is_arabic
-                else "يجب أن تكون النسبة المئوية الإجمالية مساوية لـ 100% تماماً قبل الحفظ."
+    with st.form(key="category_withdrawal_form"):
+        col_w1, col_w2 = st.columns(2)
+        with col_w1:
+            withdrawal_date = st.date_input(
+                "1. Date of Withdrawal:" if not is_arabic else "1. تاريخ السحب:",
+                value=date.today(),
             )
-        else:
-            breakdown_str = ";".join([f"{k}:{v}" for k, v in ratios_general.items()])
-            try:
-                query = """
-                    INSERT INTO feed_recipes (recipe_type, calculated_mix_cost_per_kg, recipe_breakdown) 
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (recipe_type) 
-                    DO UPDATE SET 
-                        calculated_mix_cost_per_kg = EXCLUDED.calculated_mix_cost_per_kg,
-                        recipe_breakdown = EXCLUDED.recipe_breakdown;
-                """
-                db.execute_custom_query(
-                    query,
-                    ("General Herd", blend_cost_general, breakdown_str),
-                    is_select=False,
-                )
-                st.success(
-                    "General Herd feed parameters committed successfully to the cloud!"
+
+            outbound_category = st.selectbox(
+                "2. Outbound Category:" if not is_arabic else "2. فئة الصرف:",
+                ["Fattening Category", "Rest of the Herd (Excluding Newborns)"],
+            )
+
+            withdrawal_ingredient = st.selectbox(
+                (
+                    "Select Feed Ingredient to Withdraw:"
                     if not is_arabic
-                    else "تم حفظ معاملات علف القطيع العام بنجاح في السحاب!"
-                )
-                st.rerun()
-            except Exception as e:
+                    else "اختر مكون العلف المراد سحبه:"
+                ),
+                (
+                    active_item_options
+                    if active_item_options
+                    else ["No active items found"]
+                ),
+            )
+
+        with col_w2:
+            qty_withdrawal = st.number_input(
+                (
+                    "3. Quantity Withdrawal by Kg:"
+                    if not is_arabic
+                    else "3. كمية السحب بالكجم:"
+                ),
+                min_value=0.0,
+                step=50.0,
+                value=200.0,
+            )
+
+            current_ing_cost = price_lookup.get(withdrawal_ingredient, 15.0)
+            calculated_withdrawal_cost = qty_withdrawal * current_ing_cost
+
+            st.metric(
+                (
+                    "Calculated Total Consumption Cost ($):"
+                    if not is_arabic
+                    else "إجمالي تكلفة الاستهلاك المحسوبة ($):"
+                ),
+                f"$ {calculated_withdrawal_cost:,.2f}",
+            )
+
+        withdrawal_notes = st.text_input(
+            "Withdrawal Notes / Pen ID:"
+            if not is_arabic
+            else "ملاحظات السحب / رقم الحظيرة:"
+        )
+
+        submit_withdrawal = st.form_submit_button(
+            "Commit Category Withdrawal" if not is_arabic else "اعتماد سحب الفئة"
+        )
+
+        if submit_withdrawal:
+            if (
+                not withdrawal_ingredient
+                or withdrawal_ingredient == "No active items found"
+            ):
                 st.error(
-                    f"Database Execution Error: {e}"
+                    "Please select a valid feed ingredient."
                     if not is_arabic
-                    else f"خطأ في تنفيذ قاعدة البيانات: {e}"
+                    else "يرجى اختيار مكون علف صالح."
+                )
+            elif qty_withdrawal <= 0:
+                st.error(
+                    "Quantity withdrawn must be greater than zero."
+                    if not is_arabic
+                    else "يجب أن تكون كمية السحب أكبر من الصفر."
+                )
+            else:
+                current_stock_row = df_active[
+                    df_active["item_name"] == withdrawal_ingredient
+                ]
+                available_stock = (
+                    float(current_stock_row.iloc[0]["quantity_kg"])
+                    if not current_stock_row.empty
+                    else 0.0
                 )
 
-# --- 3-WEEK FORECAST ---
-with tab_forecast:
+                if qty_withdrawal > available_stock:
+                    st.warning(
+                        f"⚠️ Warning: Withdrawing {qty_withdrawal} kg exceeds current stock ({available_stock} kg) for {withdrawal_ingredient}!"
+                        if not is_arabic
+                        else f"⚠️ تحذير: سحب {qty_withdrawal} كجم يتجاوز المخزون الحالي ({available_stock} كجم) لـ {withdrawal_ingredient}!"
+                    )
+
+                try:
+                    comment_text = f"Outbound Category: {outbound_category} | Cost: ${calculated_withdrawal_cost:,.2f} | {withdrawal_notes}".strip()
+                    db.log_warehouse_movement(
+                        item_name=withdrawal_ingredient,
+                        quantity_shift=-qty_withdrawal,
+                        unit_cost=current_ing_cost,
+                        received_date=withdrawal_date,
+                        comments=comment_text,
+                    )
+                    st.success(
+                        f"📤 Successfully withdrawn {qty_withdrawal:,.2f} kg of {withdrawal_ingredient} for {outbound_category}!"
+                        if not is_arabic
+                        else f"📤 تم سحب {qty_withdrawal:,.2f} كجم من {withdrawal_ingredient} لـ {outbound_category} بنجاح!"
+                    )
+                    st.rerun()
+                except Exception as e:
+                    st.error(
+                        f"Database error during withdrawal: {e}"
+                        if not is_arabic
+                        else f"خطأ في قاعدة البيانات أثناء السحب: {e}"
+                    )
+
+# 📊 TAB 3: STOCK & FORECAST DASHBOARD
+with tab_stock:
+    st.markdown(
+        "### "
+        + (
+            "Active Feed Stock Valuation & Safety Parameters"
+            if not is_arabic
+            else "تقييم مخزون الأعلاف النشط ومعايير الأمان"
+        )
+    )
+    if not df_inv.empty:
+        st.dataframe(df_inv, use_container_width=True, hide_index=True)
+    else:
+        st.info(
+            "No active records to display."
+            if not is_arabic
+            else "لا توجد سجلات نشطة للعرض."
+        )
+
+    st.markdown("---")
     st.markdown(
         "### "
         + (
@@ -356,448 +472,249 @@ with tab_forecast:
 
     if forecast_df is not None and not forecast_df.empty:
         st.dataframe(forecast_df, use_container_width=True, hide_index=True)
-
-        for _, row in forecast_df.iterrows():
-            ing_col = "Ingredient" if not is_arabic else "المكون"
-            stock_col = "Current Stock" if not is_arabic else "المخزون الحالي"
-            needed_col = "Needed (21 Days)" if not is_arabic else "الاحتياج (21 يوم)"
-            gap_col = "Gap (To Purchase)" if not is_arabic else "العجز (للشراء)"
-
-            if row[stock_col] == 0 and row[needed_col] > 0:
-                st.error(
-                    f"🚨 ALERT: {row[ing_col]} is completely OUT OF STOCK! Purchase **{row[gap_col]} kg** immediately."
-                    if not is_arabic
-                    else f"🚨 تنبيه: {row[ing_col]} نافد تماماً من المخزون! قم بشراء **{row[gap_col]} كجم** فوراً."
-                )
-            elif row[gap_col] > 0:
-                st.warning(
-                    f"⚠️ Need: {row[gap_col]} kg of {row[ing_col]}."
-                    if not is_arabic
-                    else f"⚠️ الاحتياج: {row[gap_col]} كجم من {row[ing_col]}."
-                )
-            else:
-                st.success(
-                    f"✅ {row[ing_col]} stock is sufficient."
-                    if not is_arabic
-                    else f"✅ مخزون {row[ing_col]} كافٍ."
-                )
     else:
         st.info(
             "Ensure all herd groups have registered feeding standards and recipes to see the forecast."
             if not is_arabic
-            else "تأكد من تسجيل معايير التغذية ووصفات الأعلاف لجميع مجموعات القطيع لرؤية التوقعات."
+            else "تأكد من تسجيل معايير التغذية ووصفات الأعلاف لرؤية التوقعات."
         )
 
-# --- SUB-PANEL B: ADVANCED WAREHOUSE INVENTORY MANAGEMENT DESK ---
-st.markdown("---")
-st.subheader(
-    "📦 Warehouse Inventory Control Desk"
-    if not is_arabic
-    else "📦 مكتب تحكم مخزون المستودع"
-)
-
-# --- STEP 1: REGISTRATION FORM DIRECT TO ISOLATED LEDGER ---
-st.markdown(
-    "### " + ("Initial Item Setup" if not is_arabic else "إعداد صنف جديد أولياً")
-)
-with st.form(key="new_ingredient_registration_form"):
-    col_reg1, col_reg2 = st.columns(2)
-    with col_reg1:
-        new_item_name = st.text_input(
-            (
-                "Type Brand New Ingredient Name (e.g., Wheat, Radda):"
-                if not is_arabic
-                else "اكتب اسم المكون الجديد (مثل: قمح، ردة):"
-            ),
-            value="",
-        ).strip()
-    with col_reg2:
-        new_item_cost = st.number_input(
-            (
-                "Set Baseline Unit Cost per 1 kg ($):"
-                if not is_arabic
-                else "حدد تكلفة الوحدة الأساسية لكل 1 كجم ($):"
-            ),
-            min_value=0.0,
-            step=0.1,
-            value=15.0,
-        )
-
-    submit_registration = st.form_submit_button(
-        "Register Ingredient with 0.0 kg Stock"
-        if not is_arabic
-        else "تسجيل المكون بمخزون 0.0 كجم"
-    )
-
-    if submit_registration:
-        if new_item_name == "":
-            st.error(
-                "❌ Registration failed: Ingredient name cannot be empty."
-                if not is_arabic
-                else "❌ فشل التسجيل: لا يمكن ترك اسم المكون فارغاً."
-            )
-        else:
-            try:
-                existing = db.execute_custom_query(
-                    "SELECT 1 FROM inventory WHERE item_name = %s", (new_item_name,)
-                )
-
-                if isinstance(existing, pd.DataFrame) and not existing.empty:
-                    st.warning(
-                        f"ℹ️ '{new_item_name}' already exists in your cloud catalog."
-                        if not is_arabic
-                        else f"ℹ️ '{new_item_name}' موجود بالفعل في كتالوج السحاب الخاص بك."
-                    )
-                else:
-                    db.execute_custom_query(
-                        """
-                        INSERT INTO inventory (item_name, quantity_kg, reorder_level_kg, cost_per_kg, is_active)
-                        VALUES (%s, 0.0, 100.0, %s, 1)
-                        """,
-                        (new_item_name, new_item_cost),
-                        is_select=False,
-                    )
-                    st.success(
-                        f"🎉 Success! '{new_item_name}' registered into the cloud ledger."
-                        if not is_arabic
-                        else f"🎉 نجاح! تم تسجيل '{new_item_name}' في دفتر السحاب."
-                    )
-                    st.rerun()
-            except Exception as e:
-                st.error(
-                    f"❌ Database error: {e}"
-                    if not is_arabic
-                    else f"❌ خطأ في قاعدة البيانات: {e}"
-                )
-
-# --- UPDATED TAB MANAGEMENT W/ MODIFY & DELETE ---
-t_p_label = "📥 Log Stock Movements" if not is_arabic else "📥 تسجيل حركات المخزون"
-t_m_label = (
-    "✏️ Modify Cost & Alerts" if not is_arabic else "✏️ تعديل التكلفة والتنبيهات"
-)
-t_s_label = "⏸️ Toggle Status" if not is_arabic else "⏸️ تبديل الحالة"
-t_d_label = "🗑️ Permanent Delete" if not is_arabic else "🗑️ حذف نهائي"
-
-tab_purchase, tab_modify, tab_status, tab_delete = st.tabs(
-    [t_p_label, t_m_label, t_s_label, t_d_label]
-)
-
-with tab_purchase:
+# ✏️ TAB 4: CATALOG & ITEM MANAGEMENT
+with tab_mgmt:
     st.markdown(
         "### "
         + (
-            "Log Warehouse Stock Movements"
+            "Warehouse Catalog & Item Management"
             if not is_arabic
-            else "تسجيل حركات مخزون المستودع"
+            else "إدارة الكتالوج والأصناف في المستودع"
         )
     )
-    with st.form(key="purchase_movement_form_isolated"):
-        col1, col2 = st.columns(2)
-        with col1:
-            if active_item_options:
-                chosen_stock_item = st.selectbox(
-                    (
-                        "Select Target Feed Ingredient:"
-                        if not is_arabic
-                        else "اختر مكون العلف المستهدف:"
-                    ),
-                    active_item_options,
-                )
-            else:
-                st.warning(
-                    "No active ingredients available."
-                    if not is_arabic
-                    else "لا توجد مكونات نشطة متاحة."
-                )
-                chosen_stock_item = None
-
-            stock_shift = st.number_input(
-                (
-                    "Stock Volume Shift (+ Purchases, - Drawdowns):"
-                    if not is_arabic
-                    else "تغير حجم المخزون (+ مشتريات، - سحب):"
-                ),
-                step=50.0,
-                value=0.0,
-            )
-
-            received_date = st.date_input(
-                "Transaction Date:" if not is_arabic else "تاريخ المعاملة:",
-                value=date.today(),
-            )
-
-        with col2:
-            current_cost_val = 15.0
-            if chosen_stock_item and not df_active.empty:
-                match_row = df_active[df_active["item_name"] == chosen_stock_item]
-                if not match_row.empty:
-                    current_cost_val = float(match_row.iloc[0]["cost_per_kg"])
-
-            updated_cost = st.number_input(
-                (
-                    "Confirm/Update Unit Cost ($/kg):"
-                    if not is_arabic
-                    else "تأكيد/تحديث تكلفة الوحدة ($/كجم):"
-                ),
-                min_value=0.0,
-                step=0.1,
-                value=current_cost_val,
-            )
-
-            comments = st.text_area(
-                "Observations/Notes:" if not is_arabic else "ملاحظات / ملاحظات توضيحية:"
-            )
-
-        if (
-            st.form_submit_button(
-                "Commit Movement Entry" if not is_arabic else "اعتماد حركة المخزون"
-            )
-            and chosen_stock_item
-        ):
-            try:
-                db.log_warehouse_movement(
-                    chosen_stock_item,
-                    stock_shift,
-                    updated_cost,
-                    received_date,
-                    comments,
-                )
-                st.success(
-                    f"Ledger and History updated for '{chosen_stock_item}'!"
-                    if not is_arabic
-                    else f"تم تحديث دفتر السجلات والسجل التاريخي لـ '{chosen_stock_item}'!"
-                )
-                st.rerun()
-            except Exception as e:
-                st.error(
-                    f"Transaction failed: {e}"
-                    if not is_arabic
-                    else f"فشلت المعاملة: {e}"
-                )
-
-with tab_modify:
-    st.markdown(
-        "### "
-        + (
-            "Update Existing Commodity Configurations"
-            if not is_arabic
-            else "تحديث إعدادات السلع الحالية"
-        )
+    sub_reg, sub_mod, sub_stat, sub_del = st.tabs(
+        ["➕ Register", "✏️ Modify", "⏸️ Status", "🗑️ Delete"]
     )
-    if active_item_options:
-        target_modify_item = st.selectbox(
-            (
-                "Choose Ingredient to Modify:"
-                if not is_arabic
-                else "اختر المكون المراد تعديله:"
-            ),
-            active_item_options,
-            key="modify_select",
-        )
 
-        current_q, current_r, current_c = 0.0, 100.0, 15.0
-        if not df_active.empty and target_modify_item:
-            m_row = df_active[df_active["item_name"] == target_modify_item]
-            if not m_row.empty:
-                current_q = float(m_row.iloc[0]["quantity_kg"])
-                current_r = float(m_row.iloc[0].get("reorder_level_kg", 100.0))
-                current_c = float(m_row.iloc[0]["cost_per_kg"])
-
-        with st.form(key="modify_parameters_form"):
-            mod_col1, mod_col2, mod_col3 = st.columns(3)
-            with mod_col1:
-                new_qty = st.number_input(
-                    (
-                        "Inventory Adjustment (kg):"
-                        if not is_arabic
-                        else "تعديل المخزون (كجم):"
-                    ),
-                    value=current_q,
-                    step=10.0,
-                )
-            with mod_col2:
-                new_reorder = st.number_input(
-                    "Safety Threshold (kg):" if not is_arabic else "حد الأمان (كجم):",
-                    value=current_r,
-                    step=10.0,
-                )
-            with mod_col3:
-                new_price = st.number_input(
-                    "Cost per kg ($):" if not is_arabic else "التكلفة لكل كجم ($):",
-                    value=current_c,
-                    step=0.1,
-                )
-
-            if (
-                st.form_submit_button(
-                    "Save Altered Record" if not is_arabic else "حفظ السجل المعدل"
-                )
-                and target_modify_item
-            ):
+    with sub_reg:
+        with st.form(key="reg_form"):
+            new_item_name = st.text_input("Ingredient Name:", value="").strip()
+            new_item_cost = st.number_input(
+                "Unit Cost ($/kg):", min_value=0.0, step=0.1, value=15.0
+            )
+            if st.form_submit_button("Register") and new_item_name:
                 db.execute_custom_query(
-                    "UPDATE inventory SET quantity_kg = %s, reorder_level_kg = %s, cost_per_kg = %s WHERE item_name = %s",
-                    (new_qty, new_reorder, new_price, target_modify_item),
+                    "INSERT INTO inventory (item_name, quantity_kg, reorder_level_kg, cost_per_kg, is_active) VALUES (%s, 0.0, 100.0, %s, 1)",
+                    (new_item_name, new_item_cost),
                     is_select=False,
                 )
-                st.success(
-                    f"✏️ Successfully updated '{target_modify_item}'!"
-                    if not is_arabic
-                    else f"✏️ تم تحديث '{target_modify_item}' بنجاح!"
+                st.success("Registered successfully!")
+                st.rerun()
+
+    with sub_mod:
+        if active_item_options:
+            target_mod = st.selectbox("Select Item:", active_item_options)
+            m_row = df_active[df_active["item_name"] == target_mod].iloc[0]
+            with st.form(key="mod_form"):
+                nq = st.number_input(
+                    "Quantity (kg):", value=float(m_row["quantity_kg"])
+                )
+                nr = st.number_input(
+                    "Safety Threshold (kg):",
+                    value=float(m_row.get("reorder_level_kg", 100.0)),
+                )
+                nc = st.number_input("Cost ($/kg):", value=float(m_row["cost_per_kg"]))
+                if st.form_submit_button("Save"):
+                    db.execute_custom_query(
+                        "UPDATE inventory SET quantity_kg = %s, reorder_level_kg = %s, cost_per_kg = %s WHERE item_name = %s",
+                        (nq, nr, nc, target_mod),
+                        is_select=False,
+                    )
+                    st.success("Updated!")
+                    st.rerun()
+
+    with sub_stat:
+        if active_item_options:
+            to_hide = st.selectbox("Archive Item:", active_item_options)
+            if st.button("Archive"):
+                db.execute_custom_query(
+                    "UPDATE inventory SET is_active = 0 WHERE item_name = %s",
+                    (to_hide,),
+                    is_select=False,
                 )
                 st.rerun()
-    else:
-        st.info(
-            "No active materials available."
-            if not is_arabic
-            else "لا توجد مواد نشطة متاحة."
-        )
 
-with tab_status:
+    with sub_del:
+        if active_item_options:
+            to_del = st.selectbox("Delete Item:", active_item_options)
+            if st.button("Purge"):
+                db.execute_custom_query(
+                    "DELETE FROM inventory WHERE item_name = %s",
+                    (to_del,),
+                    is_select=False,
+                )
+                st.rerun()
+
+# 📋 TAB 5: RECIPE RATIOS (REFERENCE)
+with tab_ref:
     st.markdown(
         "### "
         + (
-            "Change Ingredient Status Visibility"
+            "Recipe Ratios & Benchmark Standards (Reference)"
             if not is_arabic
-            else "تغيير حالة ظهور المكون"
+            else "نسب الوصفات ومعايير المؤشرات (مرجع)"
         )
     )
-    col_deact, col_react = st.columns(2)
-
-    with col_deact:
-        st.markdown(
-            "#### " + ("⏸️ Archive Item" if not is_arabic else "⏸️ أرشفة العنصر")
+    ratios_fattening = {}
+    for _, row in df_active.iterrows():
+        ing_name = row["item_name"]
+        default_val = get_saved_ratio_dynamic("Fattening", ing_name)
+        ratios_fattening[ing_name] = st.slider(
+            f"Fattening Ratio - {ing_name} (%)",
+            0,
+            100,
+            default_val,
+            key=f"f_{ing_name}",
         )
-        with st.form(key="deact_form"):
-            if active_item_options:
-                to_deactivate = st.selectbox(
-                    (
-                        "Select Ingredient to Hide:"
-                        if not is_arabic
-                        else "اختر المكون لإخفائه:"
-                    ),
-                    active_item_options,
-                )
-                if (
-                    st.form_submit_button(
-                        "Mark as Inactive" if not is_arabic else "تعيين كغير نشط"
-                    )
-                    and to_deactivate
-                ):
-                    db.execute_custom_query(
-                        "UPDATE inventory SET is_active = 0 WHERE item_name = %s",
-                        (to_deactivate,),
-                        is_select=False,
-                    )
-                    st.success(
-                        "Item archived." if not is_arabic else "تم أرشفة العنصر."
-                    )
-                    st.rerun()
-            else:
-                st.form_submit_button(
-                    "Archive Disabled" if not is_arabic else "الأرشفة معطلة",
-                    disabled=True,
-                )
+    if st.button("Save Fattening Ratio"):
+        breakdown_str = ";".join([f"{k}:{v}" for k, v in ratios_fattening.items()])
+        blend_cost = sum(
+            (ratios_fattening[k] / 100.0) * price_lookup.get(k, 0)
+            for k in ratios_fattening
+        )
+        db.execute_custom_query(
+            "INSERT INTO feed_recipes (recipe_type, calculated_mix_cost_per_kg, recipe_breakdown) VALUES (%s, %s, %s) ON CONFLICT (recipe_type) DO UPDATE SET calculated_mix_cost_per_kg = EXCLUDED.calculated_mix_cost_per_kg, recipe_breakdown = EXCLUDED.recipe_breakdown",
+            ("Fattening", blend_cost, breakdown_str),
+            is_select=False,
+        )
+        st.success("Saved Fattening Recipe!")
+        st.rerun()
 
-    with col_react:
+# 📑 TAB 6: REPORTS & PRINTABLE VOUCHERS
+with tab_reports:
+    st.markdown(
+        "### "
+        + (
+            "📑 Reports, Printable Vouchers & CSV Exports"
+            if not is_arabic
+            else "📑 التقارير، السندات القابلة للطباعة وتصدير CSV"
+        )
+    )
+
+    rep_sub1, rep_sub2 = st.tabs(
+        ["🖨️ Printable Vouchers (Slips)", "📊 Movement Audit & Export Summary"]
+    )
+
+    # 1. Printable Vouchers
+    with rep_sub1:
         st.markdown(
             "#### "
-            + ("▶️ Reactivate Item" if not is_arabic else "▶️ إعادة تنشيط العنصر")
-        )
-        with st.form(key="react_form"):
-            inactive_options = (
-                df_inactive["item_name"].tolist() if not df_inactive.empty else []
-            )
-            if inactive_options:
-                to_reactivate = st.selectbox(
-                    (
-                        "Select Ingredient to Restore:"
-                        if not is_arabic
-                        else "اختر المكون لاستعادته:"
-                    ),
-                    inactive_options,
-                )
-                if (
-                    st.form_submit_button(
-                        "Restore to Active Duty"
-                        if not is_arabic
-                        else "استعادة للخدمة النشطة"
-                    )
-                    and to_reactivate
-                ):
-                    db.execute_custom_query(
-                        "UPDATE inventory SET is_active = 1 WHERE item_name = %s",
-                        (to_reactivate,),
-                        is_select=False,
-                    )
-                    st.success(
-                        "Item restored!" if not is_arabic else "تم استعادة العنصر!"
-                    )
-                    st.rerun()
-            else:
-                st.form_submit_button(
-                    "Restore Disabled" if not is_arabic else "الاستعادة معطلة",
-                    disabled=True,
-                )
-
-with tab_delete:
-    st.markdown(
-        "### ⚠️ "
-        + ("Permanent Record Removal" if not is_arabic else "إزالة السجل بشكل دائم")
-    )
-    all_deletable_items = df_inv["item_name"].tolist() if not df_inv.empty else []
-
-    with st.form(key="hard_delete_form"):
-        if all_deletable_items:
-            to_delete = st.selectbox(
-                "Select Commodity to Wipe:" if not is_arabic else "اختر السلعة لمسحها:",
-                all_deletable_items,
-            )
-            confirm_checkbox = st.checkbox(
-                "I confirm permanent deletion from the cloud."
+            + (
+                "Generate Printable Operation Voucher"
                 if not is_arabic
-                else "أؤكد الحذف النهائي من السحاب."
+                else "إطباع سند تشغيلي"
             )
+        )
+        if not df_logs.empty:
+            log_options = [
+                f"ID: {row['id']} | {row['item_name']} | Shift: {row['quantity_change']}kg | Date: {row['received_date']}"
+                for _, row in df_logs.iterrows()
+            ]
+            selected_log_str = st.selectbox("Select Transaction Log ID:", log_options)
 
-            if (
-                st.form_submit_button(
-                    "Permanently Purge" if not is_arabic else "مسح نهائي"
+            if selected_log_str:
+                selected_id = int(
+                    selected_log_str.split("|")[0].replace("ID:", "").strip()
                 )
-                and to_delete
-            ):
-                if not confirm_checkbox:
-                    st.error(
-                        "❌ You must check the confirmation box."
-                        if not is_arabic
-                        else "❌ يجب تحديد مربع التأكيد."
-                    )
-                else:
-                    db.execute_custom_query(
-                        "DELETE FROM inventory WHERE item_name = %s",
-                        (to_delete,),
-                        is_select=False,
-                    )
-                    st.success(
-                        f"💥 '{to_delete}' wiped from the cloud database."
-                        if not is_arabic
-                        else f"💥 تم مسح '{to_delete}' من قاعدة بيانات السحاب."
-                    )
-                    st.rerun()
+                log_row = df_logs[df_logs["id"] == selected_id].iloc[0]
+
+                # Printable Voucher Card UI
+                st.markdown("---")
+                voucher_type = (
+                    "INBOUND SHIPMENT / RECEIVING VOUCHER"
+                    if float(log_row["quantity_change"]) > 0
+                    else "OUTBOUND CONSUMPTION VOUCHER"
+                )
+
+                st.markdown(
+                    f"""
+                <div style="border: 2px solid #4CAF50; padding: 20px; border-radius: 10px; background-color: #fafafa; color: #333;">
+                    <h2 style="text-align: center; color: #2E7D32;">myHerdFinance Feed Warehouse</h2>
+                    <h4 style="text-align: center; color: #555;">{voucher_type}</h4>
+                    <hr>
+                    <p><b>Transaction ID:</b> #{log_row['id']}</p>
+                    <p><b>Date:</b> {log_row['received_date']}</p>
+                    <p><b>Feed Ingredient:</b> {log_row['item_name']}</p>
+                    <p><b>Quantity Movement:</b> {float(log_row['quantity_change']):,.2f} kg</p>
+                    <p><b>Operational Notes / Details:</b> {log_row['comments']}</p>
+                    <br><br>
+                    <table style="width: 100%;">
+                      <tr>
+                        <td><b>Prepared By:</b> ____________________</td>
+                        <td><b>Authorized Sign-off:</b> ____________________</td>
+                      </tr>
+                    </table>
+                </div>
+                """,
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    "*(Tip: Press `Ctrl + P` in your browser to print this voucher directly).*"
+                )
         else:
             st.info(
-                "No records to delete." if not is_arabic else "لا توجد سجلات للحذف."
+                "No transaction logs available yet."
+                if not is_arabic
+                else "لا توجد سجلات معاملات متاحة حتى الآن."
             )
 
-# --- DATAFRAME RENDERING ---
-st.subheader(
-    "Active Feed Stock Valuation & Safety Parameters"
-    if not is_arabic
-    else "تقييم مخزون الأعلاف النشط ومعايير الأمان"
-)
-if not df_inv.empty:
-    st.dataframe(df_inv, use_container_width=True, hide_index=True)
-else:
-    st.info(
-        "No active records to display."
-        if not is_arabic
-        else "لا توجد سجلات نشطة للعرض."
-    )
+    # 2. Audit Trail & Export Summary
+    with rep_sub2:
+        st.markdown(
+            "#### "
+            + (
+                "Warehouse Movement Audit Trail & Summary"
+                if not is_arabic
+                else "سجل تدقيق حركة المستودع وملخص التقرير"
+            )
+        )
+
+        if not df_logs.empty:
+            # Date filter
+            col_d1, col_d2 = st.columns(2)
+            with col_d1:
+                start_d = st.date_input(
+                    "Start Date:", value=date.today() - timedelta(days=30)
+                )
+            with col_d2:
+                end_d = st.date_input("End Date:", value=date.today())
+
+            # Filter dataframe by date
+            df_logs["parsed_date"] = pd.to_datetime(
+                df_logs["received_date"], errors="coerce"
+            ).dt.date
+            filtered_logs = df_logs[
+                (df_logs["parsed_date"] >= start_d) & (df_logs["parsed_date"] <= end_d)
+            ]
+
+            st.dataframe(
+                filtered_logs.drop(columns=["parsed_date"]),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            # Export CSV Download Button
+            csv_data = filtered_logs.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label=(
+                    "📥 Download Filtered Movement Report (CSV)"
+                    if not is_arabic
+                    else "📥 تحميل تقرير الحركات المفلترة (CSV)"
+                ),
+                data=csv_data,
+                file_name=f"feed_inventory_audit_{start_d}_to_{end_d}.csv",
+                mime="text/csv",
+            )
+        else:
+            st.info(
+                "No movement logs found."
+                if not is_arabic
+                else "لم يتم العثور على سجلات حركة."
+            )
