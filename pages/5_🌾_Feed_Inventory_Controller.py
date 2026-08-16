@@ -210,7 +210,7 @@ with tab_receive:
                 "1. Date Received:" if not is_arabic else "1. تاريخ الاستلام:",
                 value=date.today(),
             )
-
+#====================
             supplier_options = [
                 "ألحاج أحمد",
                 "الحاج فؤاد",
