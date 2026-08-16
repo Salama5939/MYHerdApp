@@ -212,10 +212,10 @@ with tab_receive:
             )
 
             supplier_options = [
-                "Local Grain Supplier",
-                "Agricultural Development Co.",
-                "El-Wadi Feed Corp",
-                "Direct Farm Producer",
+                "ألحاج أحمد",
+                "الحاج فؤاد",
+                "عم خميس",
+                "الحاج عبد الباسط",
                 "Other Supplier",
             ]
             chosen_supplier = st.selectbox(
