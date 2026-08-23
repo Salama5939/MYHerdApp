@@ -6,6 +6,32 @@ import plotly.express as px
 from datetime import datetime, timedelta
 
 # ===================================================
+# 🎨 PAGE CONFIGURATION & LAYOUT
+# ===================================================
+st.set_page_config(
+    page_title="Strategic Performance Metrics", page_icon="📊", layout="wide"
+)
+
+# --- Custom CSS to adjust metric font size so titles/totals fit properly ---
+st.markdown(
+    """
+    <style>
+        /* Scale down metric numbers so they don't crowd or clip */
+        [data-testid="stMetricValue"] {
+            font-size: 1.6rem !important;
+        }
+        /* Scale down metric titles/labels */
+        [data-testid="stMetricLabel"] {
+            font-size: 0.85rem !important;
+        }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
+# ===================================================
+
+# ===================================================
 # 📂 Path management
 parent_dir = os.path.dirname(os.path.dirname(__file__))
 if parent_dir not in sys.path:

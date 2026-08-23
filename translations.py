@@ -25,7 +25,7 @@ TRANSLATIONS = {
         "Slaughtered": "Slaughtered",
         "Died": "Died",
         # Feed Ingredients
-        "Ingredents": "Ingredents",
+        "Ingredents": "Ingredients",
         "Soya Bean": "Soya Bean",
         "Wheat": "Wheat",
         "Corn": "Corn",
@@ -56,6 +56,31 @@ TRANSLATIONS = {
         "herd_structure_title": "Herd Structure (Excluding Newborns & Off-Take)",
         "allocation_ratio_title": "Allocation Ratio (Excluding Newborns & Off-Take)",
         "no_active_herd": "📂 No active herd logs found.",
+        # Feed Audit Report Labels
+        "feed_audit_title": "📊 Biological Feed Variance & Audit Report",
+        "feed_audit_desc": "Comprehensive nutritional audit cross-checking your precise ingredient mix recipes against actual ledger expenses.",
+        "audit_params": "📋 Audit Parameters",
+        "start_date": "Start Date",
+        "end_date": "End Date",
+        "active_period": "Active Period",
+        "days": "days",
+        "nutritional_mixes": "Nutritional Mix Profiles",
+        "fattening_mix": "Fattening Mix",
+        "general_mix": "General Herd Mix",
+        "fat_intake_pct": "Fattening Daily Intake (% Body Weight)",
+        "gen_intake_rate": "General Herd Daily Intake (kg/head/day)",
+        "run_audit": "Run Comprehensive Feed Audit",
+        "summary_title": "Head Count & Total Consumption Summary",
+        "fattening_head_count": "Fattening Head Count",
+        "general_herd_head_count": "General Herd Head Count",
+        "fat_total_feed": "Fattening Total Feed (Bio)",
+        "gen_total_feed": "General Herd Total Feed (Bio)",
+        "head": "head",
+        "avg_intake_cost": "Average Fed Amount & Cost / Head / Day",
+        "fattening_intake": "Fattening Avg Intake",
+        "fattening_cost_head": "Fattening Cost / Head",
+        "general_intake": "General Herd Avg Intake",
+        "general_cost_head": "General Herd Cost / Head",
     },
     "العربية (Arabic)": {
         "lang_label": "اختر اللغة",
@@ -93,7 +118,7 @@ TRANSLATIONS = {
         "nav_1": "1. مؤشرات الأداء الاستراتيجية",
         "nav_2": "2. سجل القطيع النشط",
         "nav_3": "3. سجلات الولادة",
-        "nav_4": "4. سجلات أداءالنمو",
+        "nav_4": "4. سجلات أداء النمو",
         "nav_5": "5. مخزون العلف",
         "nav_6": "6. تصحيح إدخال البيانات",
         "nav_7": "7. تقارير الأداء",
@@ -110,6 +135,31 @@ TRANSLATIONS = {
         "herd_structure_title": "تركيبة القطيع (باستثناء المواليد الجدد والمستبعدات)",
         "allocation_ratio_title": "نسب التوزيع (باستثناء المواليد الجدد والمستبعدات)",
         "no_active_herd": "📂 لم يتم العثور على سجلات للقطيع النشط.",
+        # Feed Audit Report Labels (Arabic)
+        "feed_audit_title": "📊 تقرير مراجعة وتحليل الأعلاف البيولوجية",
+        "feed_audit_desc": "مراجعة غذائية شاملة تقارن وصفات الخلطات الدقيقة بمصروفات دفتر الأستاذ الفعلي.",
+        "audit_params": "📋 إعدادات المراجعة",
+        "start_date": "تاريخ البدء",
+        "end_date": "تاريخ الانتهاء",
+        "active_period": "فترة المراجعة النشطة",
+        "days": "يوم",
+        "nutritional_mixes": "ملفات الخلطات الغذائية",
+        "fattening_mix": "خلطة التسمين",
+        "general_mix": "خلطة القطيع العام",
+        "fat_intake_pct": "الاستهلاك اليومي للتسمين (% من وزن الجسم)",
+        "gen_intake_rate": "الاستهلاك اليومي للقطيع العام (كجم/رأس/يوم)",
+        "run_audit": "تشغيل تقرير مراجعة الأعلاف الشامل",
+        "summary_title": "ملخص أعداد الرأس وإجمالي الاستهلاك",
+        "fattening_head_count": "أعداد رؤوس التسمين",
+        "general_herd_head_count": "أعداد رؤوس القطيع العام",
+        "fat_total_feed": "إجمالي أعلاف التسمين (بيولوجي)",
+        "gen_total_feed": "إجمالي أعلاف القطيع العام (بيولوجي)",
+        "head": "رأس",
+        "avg_intake_cost": "متوسط كمية التغذية والتكلفة / رأس / يوم",
+        "fattening_intake": "متوسط استهلاك التسمين",
+        "fattening_cost_head": "تكلفة التسمين / رأس",
+        "general_intake": "متوسط استهلاك القطيع العام",
+        "general_cost_head": "تكلفة القطيع العام / رأس",
     },
 }
 
@@ -152,7 +202,7 @@ def apply_rtl_styling():
                 }
                 
                 /* Adjust selectboxes and input labels */
-                .stSelectbox label, .stTextInput label, .stDateInput label, .stNumberInput label {
+                .stSelectbox label, .stTextInput label, .stDateInput label, .stNumberInput label, .stSlider label {
                     direction: rtl;
                     text-align: right;
                 }

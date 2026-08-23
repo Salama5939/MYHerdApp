@@ -25,6 +25,8 @@ from translations import init_language_state, t, apply_rtl_styling
 init_language_state()
 apply_rtl_styling()
 
+is_arabic = st.session_state.get("language", "English") == "العربية (Arabic)"
+
 # --- MAIN DASHBOARD CONTENT ---
 st.title(t("farm_control_center"))
 st.subheader(f"🐑 {t('control_room')}")
@@ -79,4 +81,9 @@ with col6:
         "pages/12_📉_Off_Take_History_Report.py",
         label=t("nav_12"),
         icon="📉",
+    )
+    st.page_link(
+        "pages/13_📊_Feed_Audit_Report.py",
+        label="Feed Audit Report" if not is_arabic else "تقرير مراجعة الأعلاف",
+        icon="📊",
     )

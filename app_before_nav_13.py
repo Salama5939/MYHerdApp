@@ -106,11 +106,6 @@ pages = [
     st.Page("pages/11_📅_Breeding_Readiness_Report.py", title=t("nav_11"), icon="📅"),
     st.Page("pages/12_📉_Off_Take_History_Report.py", title=t("nav_12"), icon="📉"),
     st.Page(
-        "pages/13_📊_Feed_Audit_Report.py",
-        title="Feed Audit Report" if not is_arabic else "تقرير مراجعة الأعلاف",
-        icon="📊",
-    ),
-    st.Page(
         "pages/cutting_management.py",
         title=(
             "Cutting & Butcher Management"
@@ -123,6 +118,7 @@ pages = [
 
 pg = st.navigation(pages)
 pg.run()
+
 
 st.markdown("---")
 st.caption("System Status: 🟢 Cloud Connected | ☁️ Supabase Live")
