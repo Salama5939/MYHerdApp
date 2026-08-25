@@ -28,13 +28,46 @@ apply_rtl_styling()
 is_arabic = st.session_state.get("language", "English") == "العربية (Arabic)"
 
 # --- MAIN DASHBOARD CONTENT ---
-st.title(t("farm_control_center"))
-st.subheader(f"🐑 {t('control_room')}")
+st.title(
+    t("farm_control_center")
+    if "farm_control_center" in st.session_state.get("translations", {})
+    else ("مركز قيادة المزرعة" if is_arabic else "Farm Control Center")
+)
+st.subheader(f"🐑 {'غرفة التحكم التنفيذية' if is_arabic else 'Executive Control Room'}")
 st.markdown("---")
 
 # ===========================================
-# Section 2.1: Herd Management
-st.header(t("management_apps_header"))
+# Section 1: Executive Reports Hub Highlight
+st.header(
+    "📑 Executive Reports & Board Analytics"
+    if not is_arabic
+    else "📑 مركز التقارير التنفيذية وتحليلات مجلس الإدارة"
+)
+col_exec1, col_exec2 = st.columns([2, 1])
+
+with col_exec1:
+    st.markdown(
+        "**Access the complete 6-report strategic suite:** Breakeven & Restocking, Production Line Profitability, "
+        "FCR Efficiency, Biological Asset Valuation, Reproductive & Mortality Audit, and Off-Take Timing Optimization."
+        if not is_arabic
+        else "**الوصول إلى الحزمة الاستراتيجية المكونة من 6 تقارير:** نقطة التعادل وإعادة التسكعين، ربحية خطوط الإنتاج، كفاءة التحويل الغذائي، تقييم الأصول البيولوجية، تدقيق المواليد والنافِق، وتوقيت البيع الأمثل."
+    )
+with col_exec2:
+    st.page_link(
+        "pages/14_Executive_Reports.py",
+        label="Open Executive Hub" if not is_arabic else "فتح مركز التقارير",
+        icon="📑",
+    )
+
+st.markdown("---")
+
+# ===========================================
+# Section 2.1: Herd Management Apps
+st.header(
+    t("management_apps_header")
+    if "management_apps_header" in st.session_state.get("translations", {})
+    else ("تطبيقات الإدارة التشغيلية" if is_arabic else "Operational Management Apps")
+)
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -53,8 +86,13 @@ with col3:
 
 st.markdown("---")
 
-# Section 2.2: Herd Performance Reports
-st.header(t("performance_reports_header"))
+# ===========================================
+# Section 2.2: Herd Performance & Audit Reports
+st.header(
+    t("performance_reports_header")
+    if "performance_reports_header" in st.session_state.get("translations", {})
+    else ("تقارير الأداء والمراجعة" if is_arabic else "Performance & Audit Reports")
+)
 col4, col5, col6 = st.columns(3)
 
 with col4:
@@ -86,4 +124,20 @@ with col6:
         "pages/13_📊_Feed_Audit_Report.py",
         label="Feed Audit Report" if not is_arabic else "تقرير مراجعة الأعلاف",
         icon="📊",
+    )
+
+    st.page_link(
+        "pages/14_Executive_Reports.py",
+        label="Executive Reports Hub" if not is_arabic else "مركز التقارير التنفيذية",
+        icon="📑",
+    )
+
+    st.page_link(
+        "pages/15_cutting_management.py",
+        label=(
+            "Cutting & Butcher Management"
+            if not is_arabic
+            else "إدارة التقطيع والجزارين"
+        ),
+        icon="🥩",
     )

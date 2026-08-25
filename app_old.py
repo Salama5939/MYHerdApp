@@ -81,7 +81,7 @@ with st.sidebar:
 # Check current active language state
 is_arabic = st.session_state.get("language", "English") == "العربية (Arabic)"
 
-# Define global navigation pages with dynamic bilingual titles (Including Executive Reports Hub)
+# Define global navigation pages with dynamic titles
 pages = [
     st.Page(
         "Dashboard.py",
@@ -111,12 +111,7 @@ pages = [
         icon="📊",
     ),
     st.Page(
-        "pages/14_Executive_Reports.py",
-        title=("Executive Reports Hub" if not is_arabic else "مركز التقارير التنفيذية"),
-        icon="📑",
-    ),
-    st.Page(
-        "pages/15_cutting_management.py",
+        "pages/cutting_management.py",
         title=(
             "Cutting & Butcher Management"
             if not is_arabic
