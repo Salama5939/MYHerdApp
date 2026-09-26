@@ -118,6 +118,7 @@ with tab1:
                 "Slaughtered",
                 "Died",
                 "Zakate",
+                "LostTag#",
                 "Donate",
             ]
             status_labels = {
@@ -128,6 +129,7 @@ with tab1:
                 "Slaughtered": "Slaughtered (مذبوح)" if is_arabic else "Slaughtered",
                 "Died": "Died (نافق)" if is_arabic else "Died",
                 "Zakate": "Zakate (زكاة)" if is_arabic else "Zakate",
+                "LostTag#": "LostTag# (رقم الأذن مفقود)" if is_arabic else "LostTag#",
                 "Donate": "Donate (تبرع)" if is_arabic else "Donate",
             }
             status = st.selectbox(
@@ -251,7 +253,14 @@ with tab2:
                     active_list,
                 )
 
-                exit_actions = ["Sold", "Slaughtered", "Died", "Zakate", "Donate"]
+                exit_actions = [
+                    "Sold",
+                    "Slaughtered",
+                    "Died",
+                    "Zakate",
+                    "LostTag#",
+                    "Donate",
+                ]
                 exit_labels = {
                     "Sold": "Sold (مباع)" if is_arabic else "Sold",
                     "Slaughtered": (
@@ -259,6 +268,9 @@ with tab2:
                     ),
                     "Died": "Died (نافق)" if is_arabic else "Died",
                     "Zakate": "Zakate (زكاة)" if is_arabic else "Zakate",
+                    "LostTag#": (
+                        "LostTag# (رقم الأذن مفقود)" if is_arabic else "LostTag#"
+                    ),
                     "Donate": "Donate (تبرع)" if is_arabic else "Donate",
                 }
                 target_action = st.selectbox(
@@ -341,6 +353,7 @@ if not df_herd.empty:
             "Slaughtered": "مذبوح",
             "Died": "نافق",
             "Zakate": "زكاة",
+            "LostTag#": "رقم الأذن مفقود",
             "Donate": "تبرع",
         }
         display_df["category"] = (

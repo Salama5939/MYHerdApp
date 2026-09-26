@@ -714,3 +714,72 @@ def get_butchers_lookup(supabase):
     except Exception as e:
         print(f"Error fetching butchers lookup: {e}")
         return {}
+
+
+# ===============================================
+# This is a new added section to fetch the active herd biological asset valuation view from Supabase.
+# ===============================================
+# These functions are designed to be called from the Streamlit pages, such as 14_Executive_Reports.py, to retrieve and display the valuation data.
+# Only the get_biological_asset_valuation function is used in the report page, but the others are provided for future expansion if needed.
+# Overall, these functions encapsulate the database access logic and provide a clean interface for the Streamlit app to retrieve the necessary data without exposing raw SQL queries in the page code.
+# ================================================
+import psycopg2
+import pandas as pd
+import os
+import streamlit as st
+
+
+def _get_pg_connection():
+    """Helper to open a direct PostgreSQL connection using the working connection string."""
+    conn_str = st.secrets.get("CONNECTION_STRING") or os.environ.get(
+        "CONNECTION_STRING"
+    )
+    return psycopg2.connect(conn_str)
+
+
+def get_biological_asset_valuation():
+    """Fetches biological asset valuation view directly via Postgres."""
+    try:
+        with _get_pg_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM view_biological_asset_valuation;")
+                rows = cur.fetchall()
+                columns = [desc[0] for desc in (cur.description or [])]
+                if not columns:
+                    return []
+            return pd.DataFrame(rows, columns=columns).to_dict(orient="records")
+    except Exception as e:
+        print(f"Error in get_biological_asset_valuation: {e}")
+        return []
+
+
+def get_tag_unit_economics():
+    """Fetches tag-level unit economics view directly via Postgres."""
+    try:
+        with _get_pg_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM view_tag_unit_economics;")
+                rows = cur.fetchall()
+                columns = [desc[0] for desc in (cur.description or [])]
+                if not columns:
+                    return []
+            return pd.DataFrame(rows, columns=columns).to_dict(orient="records")
+    except Exception as e:
+        print(f"Error in get_tag_unit_economics: {e}")
+        return []
+
+
+def get_feed_inventory_audit():
+    """Fetches feed inventory audit view directly via Postgres."""
+    try:
+        with _get_pg_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM view_feed_inventory_audit;")
+                rows = cur.fetchall()
+                columns = [desc[0] for desc in (cur.description or [])]
+                if not columns:
+                    return []
+            return pd.DataFrame(rows, columns=columns).to_dict(orient="records")
+    except Exception as e:
+        print(f"Error in get_feed_inventory_audit: {e}")
+        return []

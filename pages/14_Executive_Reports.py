@@ -1,125 +1,281 @@
 import streamlit as st
-import os
-import subprocess
+import pandas as pd
 import sys
+import os
+import database as db
+from translations import init_language_state, t, apply_rtl_styling
 
-# 📂 Path management for imports
-parent_dir = os.path.dirname(os.path.dirname(__file__))
-if parent_dir not in sys.path:
-    sys.path.append(parent_dir)
+# 🖥️ Force Wide Layout to use full screen space
+st.set_page_config(page_title="Executive Reports & Board Analytics", layout="wide")
 
-from translations import init_language_state, apply_rtl_styling
+# 🔒 SECURITY ACCESS LOCK & LANGUAGE INITIALIZATION
+if "authenticated" not in st.session_state or not st.session_state.get(
+    "authenticated", False
+):
+    st.warning("🔒 Access Denied. Please log in on the main Home Page first.")
+    st.stop()
 
-st.set_page_config(page_title="Executive Reports Hub", page_icon="📑", layout="wide")
-
-# Initialize language and apply RTL layout if Arabic is active
 init_language_state()
 apply_rtl_styling()
 
 is_arabic = st.session_state.get("language", "English") == "العربية (Arabic)"
 
-# --- PAGE HEADER ---
-if is_arabic:
-    st.title("📑 مركز التقارير التنفيذية وتحليلات مجلس الإدارة")
-    st.markdown(
-        "إنشاء ومراجعة وتحميل التقارير الاستراتيجية المهنية بصيغة PDF المدعومة مباشرة من قاعدة بيانات Supabase."
-    )
-else:
-    st.title("📑 Executive Reports Hub & Board Analytics")
-    st.markdown(
-        "Generate, review, and download professional PDF strategic reports powered live by your Supabase database."
-    )
-
+# Page Title & Home Button (Matching standard app design)
+st.title(
+    "📑 Executive Reports & Board Analytics"
+    if not is_arabic
+    else "📑 مركز التقارير التنفيذية وتحليلات مجلس الإدارة"
+)
+db.draw_home_button()
 st.markdown("---")
 
-col1, col2 = st.columns([2, 1])
+# ===================================================
+# 📂 Path management
+parent_dir = os.path.dirname(os.path.dirname(__file__))
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+# ===================================================
 
-with col1:
-    if is_arabic:
-        st.subheader("🎯 مولد التقارير الرئيسي")
-        st.markdown(
-            "انقر على الزر أدناه لتنفيذ البرنامج النصي الرئيسي وتحديث جميع التقارير الإستراتيجية الـ 6 في نفس الوقت بأحدث بيانات Supabase."
-        )
+# Navigation Tabs for Executive Suites
+tab1, tab2, tab3 = st.tabs(
+    [
+        (
+            "⚖️ Biological Asset Valuation"
+            if not is_arabic
+            else "⚖️ تقييم الأصول البيولوجية"
+        ),
+        "📊 Tag-Level Unit Economics" if not is_arabic else "📊 اقتصاديات وحدات الأذن",
+        "🌾 Feed Inventory Audit" if not is_arabic else "🌾 مراجعة مخزون الأعلاف",
+    ]
+)
 
-        generate_btn_label = "🚀 إنشاء جميع التقارير التنفيذية الـ 6"
-        spinner_text = "جاري الاتصال بـ Supabase وتجميع التقارير..."
-        success_msg = "✅ تم بنجاح إنشاء وتحديث جميع التقارير التنفيذية الـ 6!"
-        error_msg = "❌ خطأ أثناء إنشاء التقارير:"
-    else:
-        st.subheader("🎯 Master Report Generator")
-        st.markdown(
-            "Click the button below to execute the master script and refresh all 6 strategic management reports simultaneously with the latest Supabase data."
-        )
+# ===================================================
+# TAB 1: Biological Asset Valuation
+# ===================================================
+with tab1:
+    st.subheader(
+        "Biological Asset Capitalization & Headcount Valuation"
+        if not is_arabic
+        else "رسملة الأصول البيولوجية وتقييم الرؤوس"
+    )
+    st.markdown(
+        "Active herd headcounts valued against established fixed per-head tier rates."
+        if not is_arabic
+        else "تقييم أعداد القطيع النشط مقابل معدلات الفئات الثابتة لكل رأس."
+    )
 
-        generate_btn_label = "🚀 Generate All 6 Executive Reports"
-        spinner_text = "Connecting to Supabase and compiling reports..."
-        success_msg = "✅ All 6 executive reports successfully generated and updated!"
-        error_msg = "❌ Error generating reports:"
+    try:
+        # Fetch data using dedicated db helper function
+        bio_data = db.get_biological_asset_valuation()
+        if bio_data:
+            df_bio = pd.DataFrame(bio_data)
 
-    if st.button(generate_btn_label, type="primary"):
-        with st.spinner(spinner_text):
-            try:
-                result = subprocess.run(
-                    ["python", "generate_all_reports.py"],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                st.success(success_msg)
-                st.code(result.stdout)
-            except subprocess.CalledProcessError as e:
-                st.error(f"{error_msg} {e.stderr}")
+            total_valuation = (
+                df_bio["total_asset_value"].sum()
+                if "total_asset_value" in df_bio.columns
+                else 0
+            )
+            total_head = (
+                df_bio["total_headcount"].sum()
+                if "total_headcount" in df_bio.columns
+                else 0
+            )
 
-with col2:
-    if is_arabic:
-        st.subheader("📂 أرشيف التقارير")
-        st.markdown("تحميل تقارير PDF النشطة:")
-        download_label = "تحميل"
-        no_reports_text = "لم يتم إنشاء تقارير بعد. انقر على 'إنشاء الكل' على اليسار."
-    else:
-        st.subheader("📂 Report Archive")
-        st.markdown("Download active PDF reports:")
-        download_label = "📥"
-        no_reports_text = "No reports generated yet. Click 'Generate All' on the left."
+            col1, col2 = st.columns(2)
+            col1.metric(
+                "Total Active Headcount" if not is_arabic else "إجمالي القطيع النشط",
+                f"{total_head:,}",
+            )
+            col2.metric(
+                (
+                    "Total Biological Asset Capital"
+                    if not is_arabic
+                    else "إجمالي رأس مال الأصول البيولوجية"
+                ),
+                f"{total_valuation:,.2f} EGP",
+            )
 
-    reports_dir = "reports"
-    if os.path.exists(reports_dir):
-        pdf_files = [f for f in os.listdir(reports_dir) if f.endswith(".pdf")]
-        if pdf_files:
-            for pdf in sorted(pdf_files):
-                file_path = os.path.join(reports_dir, pdf)
-                with open(file_path, "rb") as f:
-                    st.download_button(
-                        label=f"{download_label} {pdf}",
-                        data=f,
-                        file_name=pdf,
-                        mime="application/pdf",
-                        key=pdf,
-                    )
+            st.markdown("---")
+            st.dataframe(df_bio, use_container_width=True, hide_index=True)
+
+            csv_bio = df_bio.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label=(
+                    "Download Valuation CSV"
+                    if not is_arabic
+                    else "تحميل تقرير التقييم (CSV)"
+                ),
+                data=csv_bio,
+                file_name="biological_asset_valuation.csv",
+                mime="text/csv",
+            )
         else:
-            st.info(no_reports_text)
-    else:
-        st.info(no_reports_text)
+            st.warning(
+                "No records found in biological asset valuation view."
+                if not is_arabic
+                else "لا توجد سجلات في عرض تقييم الأصول البيولوجية."
+            )
+    except Exception as e:
+        st.error(f"Error loading biological asset valuation: {e}")
+
+# ===================================================
+# TAB 2: Tag-Level Unit Economics
+# ===================================================
+with tab2:
+    st.subheader(
+        "Individual Animal Profit Centers & Unit Economics"
+        if not is_arabic
+        else "مراكز ربحية الحيوانات الفردية واقتصاديات الوحدة"
+    )
+    st.markdown(
+        "Tracking acquisition costs, accumulated feed expenses, and realized sales margins per tag."
+        if not is_arabic
+        else "تتبع تكاليف الاستحواذ، مصروفات الأعلاف المتراكمة، وهامش المبيعات المحققة لكل رقم أذن."
+    )
+
+    try:
+        tag_data = db.get_tag_unit_economics()
+        if tag_data:
+            df_tag = pd.DataFrame(tag_data)
+
+            total_net = (
+                df_tag["net_profit"].sum() if "net_profit" in df_tag.columns else 0
+            )
+
+            col1, col2 = st.columns(2)
+            col1.metric(
+                (
+                    "Total Evaluated Animals"
+                    if not is_arabic
+                    else "إجمالي الحيوانات المقيمة"
+                ),
+                f"{len(df_tag):,}",
+            )
+            col2.metric(
+                (
+                    "Net Profit / Margin Contribution"
+                    if not is_arabic
+                    else "صافي الربح / المساهمة الهامشية"
+                ),
+                f"{total_net:,.2f} EGP",
+            )
+
+            st.markdown("---")
+
+            # Optional status filter if column exists
+            if "status" in df_tag.columns:
+                status_list = ["All"] + list(df_tag["status"].dropna().unique())
+                status_filter = st.selectbox(
+                    "Filter by Status" if not is_arabic else "تصفية حسب الحالة",
+                    status_list,
+                )
+                if status_filter != "All":
+                    df_tag = df_tag[df_tag["status"] == status_filter]
+
+            st.dataframe(df_tag, use_container_width=True, hide_index=True)
+
+            csv_tag = df_tag.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label=(
+                    "Download Unit Economics CSV"
+                    if not is_arabic
+                    else "تحميل تقرير اقتصاديات الوحدات (CSV)"
+                ),
+                data=csv_tag,
+                file_name="tag_unit_economics.csv",
+                mime="text/csv",
+            )
+        else:
+            st.warning(
+                "No records found in unit economics view."
+                if not is_arabic
+                else "لا توجد سجلات في عرض اقتصاديات الوحدات."
+            )
+    except Exception as e:
+        st.error(f"Error loading unit economics: {e}")
+
+# ===================================================
+# TAB 3: Feed Inventory Audit
+# ===================================================
+with tab3:
+    st.subheader(
+        "Feed Inventory Valuation & Reorder Audit"
+        if not is_arabic
+        else "تقييم مخزون الأعلاف ومراجعة حدود الطلب"
+    )
+    st.markdown(
+        "Reconciliation of physical inbound purchase logs against active stock levels and weighted-average costs."
+        if not is_arabic
+        else "مطابقة سجلات واردات المشتريات الفعلية مقابل مستويات المخزون النشط ومتوسط التكاليف المرجحة."
+    )
+
+    try:
+        feed_data = db.get_feed_inventory_audit()
+        if feed_data:
+            df_feed = pd.DataFrame(feed_data)
+
+            total_stock_value = (
+                df_feed["total_stock_cost"].sum()
+                if "total_stock_cost" in df_feed.columns
+                else 0
+            )
+            reorder_alerts = (
+                df_feed[df_feed["stock_status"] == "REORDER REQUIRED"]
+                if "stock_status" in df_feed.columns
+                else pd.DataFrame()
+            )
+
+            col1, col2 = st.columns(2)
+            col1.metric(
+                (
+                    "Total Ending Inventory Value"
+                    if not is_arabic
+                    else "إجمالي قيمة المخزون الختامي"
+                ),
+                f"{total_stock_value:,.2f} EGP",
+            )
+            col2.metric(
+                (
+                    "Ingredients Requiring Reorder"
+                    if not is_arabic
+                    else "الأصناف التي تتطلب إعادة طلب"
+                ),
+                f"{len(reorder_alerts)}",
+            )
+
+            if not reorder_alerts.empty:
+                st.warning(
+                    f"⚠️ Reorder alert triggered for: {', '.join(reorder_alerts['ingredient_name'].tolist())}"
+                    if not is_arabic
+                    else f"⚠️ تنبيه إعادة الطلب للأصناف التالية: {', '.join(reorder_alerts['ingredient_name'].tolist())}"
+                )
+
+            st.markdown("---")
+            st.dataframe(df_feed, use_container_width=True, hide_index=True)
+
+            csv_feed = df_feed.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label=(
+                    "Download Feed Audit CSV"
+                    if not is_arabic
+                    else "تحميل تقرير مراجعة الأعلاف (CSV)"
+                ),
+                data=csv_feed,
+                file_name="feed_inventory_audit.csv",
+                mime="text/csv",
+            )
+        else:
+            st.warning(
+                "No records found in feed audit view."
+                if not is_arabic
+                else "لا توجد سجلات في تقرير مراجعة الأعلاف."
+            )
+    except Exception as e:
+        st.error(f"Error loading feed inventory audit: {e}")
 
 st.markdown("---")
-
-if is_arabic:
-    st.subheader("📋 ملخص حزمة التقارير التنفيذية")
-    st.markdown("""
-    1. **سعر الشراء عند تعادل التكلفة وجدول إعادة التسكين:** يحسب الحد الأقصى المسموح به لأسعار شراء الحملان الخارجية بناءً على تكاليف خلط الأعلاف الفعلية ($13.21/كجم).
-    2. **تحليل ربحية خطوط الإنتاج:** يفصل بين حظائر التسمين النشطة، دفعات التسمين المكتملة، وقطيع التربية الأساسي.
-    3. **نسبة التحويل الغذائي (FCR) والتكلفة لكل كجم مکتسب:** يقيّم الكفاءة الغذائية، استهلاك الأعلاف، والتكلفة لكل كجم تم كسبه عبر قطيع التسمين.
-    4. **تقييم الأصول البيولوجية وديناميكيات القطيع:** يدقق في تعداد القطيع، أصول التربية النشطة، المواليد، ومعدلات دوران المخزون.
-    5. **لوحة تدقيق المواليد والنافِق:** يتتبع معدلات نجاح الولادات، أداء نعاج التكاثر، وتسربات الأمن الحيوي.
-    6. **حاسبة نقطة التعادل وتوقيت البيع الأمثل:** يراقب متوسط الزيادة اليومية في الوزن (ADG) وأيام التغذية لتحديد النافذة المثالية للبيع في السوق.
-    """)
-else:
-    st.subheader("📋 Summary of Executive Reports Suite")
-    st.markdown("""
-    1. **Breakeven Purchase Price & Restocking Schedule:** Calculates maximum allowable purchase prices for external feeder lambs based on live feed mix costs ($13.21/kg).
-    2. **Production Line Profitability Analysis:** Segregates active fattening pens, completed finishing batches, and the general breeding herd.
-    3. **Feed Conversion Ratio (FCR) & Cost-Per-Kg:** Evaluates nutritional efficiency, feed consumption, and cost per kg gained across finishing stock.
-    4. **Biological Asset Valuation & Flock Dynamics:** Audits flock census, active breeding capital, births, and inventory turnover.
-    5. **Reproductive & Mortality Leakage Dashboard:** Tracks lambing success rates, breeding ewe performance, and biosecurity mortality leaks.
-    6. **Breakeven & Optimal Off-Take Timing Calculator:** Monitors average daily gain (ADG) and days on feed to determine the optimal market selling window.
-    """)
+st.info(
+    "💡 Tip: Use 'Ctrl + P' to print or export these executive reports for your board records."
+    if not is_arabic
+    else "💡 نصيحة: استخدم 'Ctrl + P' لطباعة أو تصدير هذه التقارير التنفيذية لسجلات المجلس."
+)
