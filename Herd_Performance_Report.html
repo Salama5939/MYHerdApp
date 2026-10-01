@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Flock Performance Evaluation Report</title>
+    <style>
+      @page {
+        size: letter;
+        margin: 0.5in;
+      }
+      body {
+        font-family: "Helvetica Neue", Arial, sans-serif;
+        color: #262626;
+        margin: 0;
+        padding: 20px;
+        background-color: #f4f6f9;
+      }
+      .page {
+        background: #fff;
+        max-width: 800px;
+        margin: 0 auto 20px auto;
+        padding: 30px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        box-sizing: border-box;
+      }
+      .print-btn-container {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      .btn-print {
+        background-color: #1f497d;
+        color: white;
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: bold;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+      }
+      .btn-print:hover {
+        background-color: #163459;
+      }
+      h1 {
+        color: #1f497d;
+        font-size: 22px;
+        margin: 0 0 4px 0;
+        text-transform: uppercase;
+      }
+      .subtitle {
+        color: #595959;
+        font-size: 12px;
+        font-style: italic;
+        margin-bottom: 12px;
+      }
+      hr {
+        border: none;
+        border-top: 2px solid #1f497d;
+        margin-bottom: 12px;
+      }
+      .banner-table {
+        width: 100%;
+        background-color: #f2f5f9;
+        border: 1px solid #d9d9d9;
+        border-collapse: collapse;
+        margin-bottom: 15px;
+      }
+      .banner-table td {
+        padding: 8px 12px;
+        font-size: 11px;
+        color: #262626;
+        width: 33.33%;
+      }
+      h2 {
+        color: #1f497d;
+        font-size: 14px;
+        margin: 14px 0 6px 0;
+        border-bottom: 1px solid #1f497d;
+        padding-bottom: 3px;
+      }
+      h3 {
+        color: #2e6b9e;
+        font-size: 12px;
+        margin: 10px 0 4px 0;
+      }
+      p,
+      li {
+        font-size: 11px;
+        line-height: 1.4;
+      }
+      ul {
+        margin: 4px 0 8px 0;
+        padding-left: 18px;
+      }
+      table.data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 12px;
+      }
+      table.data-table th {
+        background-color: #1f497d;
+        color: white;
+        font-size: 11px;
+        padding: 6px 8px;
+        text-align: center;
+        border: 1px solid #1f497d;
+      }
+      table.data-table th.subhead {
+        background-color: #2e6b9e;
+      }
+      table.data-table td {
+        font-size: 10.5px;
+        padding: 5px 8px;
+        border: 1px solid #d9d9d9;
+      }
+      table.data-table tr:nth-child(even) {
+        background-color: #f9fafb;
+      }
+      table.data-table tr.total-row {
+        background-color: #f2f5f9;
+        font-weight: bold;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .text-bold {
+        font-weight: bold;
+      }
+      .text-red {
+        color: #c00000;
+        font-weight: bold;
+      }
+      .action-box {
+        background-color: #fff2f2;
+        border: 1px solid #c00000;
+        padding: 12px;
+        border-radius: 4px;
+        margin-top: 10px;
+      }
+      .action-box h3 {
+        color: #c00000;
+        margin-top: 0;
+      }
+      @media print {
+        body {
+          background: none;
+          padding: 0;
+        }
+        .page {
+          box-shadow: none;
+          margin: 0;
+          max-width: 100%;
+          padding: 0;
+        }
+        .print-btn-container {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="print-btn-container">
+      <button class="btn-print" onclick="window.print()">
+        📄 Save / Print as PDF
+      </button>
+    </div>
+
+    <div class="page">
+      <h1>Flock Performance Evaluation Report</h1>
+      <div class="subtitle">
+        Comprehensive Biological, Commercial & Inventory Performance Audit | Feb
+        22, 2026 – Sep 22, 2026
+      </div>
+      <hr />
+
+      <table class="banner-table">
+        <tr>
+          <td><b>Report Date:</b> Sep 28, 2026</td>
+          <td><b>Tracked Volume:</b> 252 Total Unique Tags</td>
+          <td><b>Evaluation Scope:</b> 5 Snapshot Dates (7 Mos)</td>
+        </tr>
+      </table>
+
+      <h2>1. Key Performance Indicators (KPI Summary)</h2>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Performance Area</th>
+            <th>Key Metric</th>
+            <th>Audit Result</th>
+            <th>Benchmark & Operational Evaluation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-bold">Gross Flock Expansion</td>
+            <td>System Active Growth Rate</td>
+            <td class="text-center text-bold">+107.3%</td>
+            <td>
+              Expanded from 82 to 170 active head in system. High biological
+              throughput.
+            </td>
+          </tr>
+          <tr>
+            <td class="text-bold">Verified Flock Expansion</td>
+            <td>Verified Active Growth Rate</td>
+            <td class="text-center text-bold">+62.2%</td>
+            <td>
+              Confirmed physical growth from 82 to 133 head present in barn
+              pens.
+            </td>
+          </tr>
+          <tr>
+            <td class="text-bold">Commercial Off-take</td>
+            <td>Slaughters & Sales Volume</td>
+            <td class="text-center text-bold">46 head (20.6%)</td>
+            <td>
+              40 fattening slaughters, 5 sales, 1 Zakat. Strong yield & revenue
+              conversion.
+            </td>
+          </tr>
+          <tr>
+            <td class="text-bold">Flock Mortality</td>
+            <td>Cumulative Mortality Rate</td>
+            <td class="text-center text-bold">2.7% (6 head)</td>
+            <td>
+              Excellent health control. Well within commercial industry target
+              (&lt; 5%).
+            </td>
+          </tr>
+          <tr>
+            <td class="text-bold">Reproductive Throughput</td>
+            <td>Completed Lambings</td>
+            <td class="text-center text-bold">39 ewes</td>
+            <td>
+              Successful post-lambing recovery and transition into active
+              lactation.
+            </td>
+          </tr>
+          <tr>
+            <td class="text-bold">Audit Reconciliation</td>
+            <td>Physical Match Rate</td>
+            <td class="text-center text-red">78.2%</td>
+            <td class="text-red">
+              Area of Concern: 37 active head unverified physically in Sept
+              stock take.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>2. Biological & Production Performance Analysis</h2>
+      <h3>A. Reproductive Efficiency & Breeding Capacity</h3>
+      <ul>
+        <li>
+          <b>Active Breeding Capacity:</b> The breeding flock currently stands
+          at <b>81 total ewes</b> (50 open/lactating ewes + 31 confirmed
+          pregnant ewes).
+        </li>
+        <li>
+          <b>Active Gestation Rate:</b> <b>38.3%</b> of the active breeding
+          flock (31 head) is currently pregnant, entering the fall breeding
+          cycle.
+        </li>
+        <li>
+          <b>Young Lamb Recruitment:</b> <b>64 active lambs</b> are in the flock
+          pipeline (37 female lambs + 27 male lambs). 6 female lambs matured
+          directly into replacement breeding stock.
+        </li>
+      </ul>
+
+      <h3>B. Fattening Pipeline & Meat Yield Off-take</h3>
+      <ul>
+        <li>
+          <b>Slaughter Conversion:</b> 40 fattening lambs were slaughtered over
+          7 months, accounting for <b>76.9% of total cumulative off-take</b>.
+        </li>
+        <li>
+          <b>Grow-out Maturation:</b> 13 young ram lambs matured from young
+          stock into the active fattening group between April and July.
+        </li>
+        <li>
+          <b>Current Finishing Pipeline:</b> As of September 22,
+          <b>21 fattening lambs</b> are actively finishing in pens (100%
+          physically verified present in barn).
+        </li>
+      </ul>
+
+      <h3>C. Flock Health & Mortality Control</h3>
+      <ul>
+        <li>
+          <b>Mortality Rate:</b> Total recorded deaths were restricted to
+          <b>6 head</b> out of 223 registered entries (<b>2.7% mortality rate</b
+          >).
+        </li>
+        <li>
+          <b>Demographic Resilience:</b> Losses were concentrated strictly in
+          young lambs rather than mature breeding ewes or rams, demonstrating
+          adult resilience.
+        </li>
+      </ul>
+
+      <h2>3. Category Inventory & Off-Take Breakdown</h2>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="subhead">Category Classification</th>
+            <th class="subhead">System Active (T5)</th>
+            <th class="subhead">Verified Active (√)</th>
+            <th class="subhead">Uncounted Active (×)</th>
+            <th class="subhead">Verification Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-bold">Ewes (Open / Lactating)</td>
+            <td class="text-center">50</td>
+            <td class="text-center">41</td>
+            <td class="text-center">9</td>
+            <td class="text-center">82.0%</td>
+          </tr>
+          <tr>
+            <td class="text-bold">(Small) Female Lambs</td>
+            <td class="text-center">37</td>
+            <td class="text-center">29</td>
+            <td class="text-center">8</td>
+            <td class="text-center">78.4%</td>
+          </tr>
+          <tr>
+            <td class="text-bold">Pregnant Ewes</td>
+            <td class="text-center">31</td>
+            <td class="text-center">28</td>
+            <td class="text-center">3</td>
+            <td class="text-center">90.3%</td>
+          </tr>
+          <tr>
+            <td class="text-bold">(Small) Male Lambs</td>
+            <td class="text-center">27</td>
+            <td class="text-center">11</td>
+            <td class="text-center">16</td>
+            <td class="text-center text-red">40.7%</td>
+          </tr>
+          <tr>
+            <td class="text-bold">Fattening Lambs</td>
+            <td class="text-center">21</td>
+            <td class="text-center">21</td>
+            <td class="text-center">0</td>
+            <td class="text-center">100.0%</td>
+          </tr>
+          <tr>
+            <td class="text-bold">Permanent Sires (Rams)</td>
+            <td class="text-center">3</td>
+            <td class="text-center">2</td>
+            <td class="text-center">1</td>
+            <td class="text-center">66.7%</td>
+          </tr>
+          <tr class="total-row">
+            <td>Total Active Flock</td>
+            <td class="text-center">169</td>
+            <td class="text-center">132</td>
+            <td class="text-center">37</td>
+            <td class="text-center">78.1%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Disposition Status</th>
+            <th>Head Count</th>
+            <th>% of Registered Herd</th>
+            <th>Operational Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-bold">Slaughtered</td>
+            <td class="text-center">40</td>
+            <td class="text-center">17.9%</td>
+            <td>Marketable fattening lamb harvests</td>
+          </tr>
+          <tr>
+            <td class="text-bold">Died (Mortality)</td>
+            <td class="text-center">6</td>
+            <td class="text-center">2.7%</td>
+            <td>Unfortunate young lamb mortalities</td>
+          </tr>
+          <tr>
+            <td class="text-bold">Sold</td>
+            <td class="text-center">5</td>
+            <td class="text-center">2.2%</td>
+            <td>Live animal commercial sales</td>
+          </tr>
+          <tr>
+            <td class="text-bold">Zakate</td>
+            <td class="text-center">1</td>
+            <td class="text-center">0.4%</td>
+            <td>Charitable livestock disbursement</td>
+          </tr>
+          <tr class="total-row">
+            <td>Total Cumulative Off-Take</td>
+            <td class="text-center">52</td>
+            <td class="text-center">23.3%</td>
+            <td>Total documented flock removals</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>4. Operational & Financial Risk Evaluation</h2>
+      <p>
+        <b>Biological vs. Administrative Performance Gap:</b> While the flock
+        demonstrates excellent biological productivity, low mortality (2.7%),
+        and high slaughter throughput (40 head), the
+        <b>37 missing active head</b> (21.9% of active inventory) presents three
+        immediate operational and financial risks:
+      </p>
+      <ul>
+        <li>
+          <b>1. Feed Ration & Expense Misallocation:</b> Formulating daily feed
+          rations for 170 active system head when only 133 animals are present
+          causes a ~22% overestimation in feed budgeting, leading to financial
+          waste.
+        </li>
+        <li>
+          <b>2. Asset Overvaluation:</b> Balance sheets overstate live
+          biological assets by 37 head until a physical write-off or locate
+          operation is finalized.
+        </li>
+        <li>
+          <b>3. Breeding Schedule Confusion:</b> Unverified ewes listed as
+          active/pregnant distort ram-to-ewe breeding group ratios for the
+          upcoming season.
+        </li>
+      </ul>
+
+      <div class="action-box">
+        <h3>5. Recommended Immediate Action Plan & Next Steps</h3>
+        <ul>
+          <li>
+            <b>Step 1 (Physical Search):</b> Conduct a targeted physical pen
+            audit focused on the 16 missing male lambs and 9 missing ewes.
+          </li>
+          <li>
+            <b>Step 2 (Feed Adjustment):</b> Immediately adjust daily feed
+            ration calculations to match the 133 physically verified head.
+          </li>
+          <li>
+            <b>Step 3 (Tag Linking):</b> Standardize ear-tag replacement logs to
+            eliminate duplicate tags (347, 171, 101) and prevent recycled tag
+            confusion.
+          </li>
+          <li>
+            <b>Step 4 (Breeding Targets):</b> Finalize breeding pen allocations
+            for the 31 pregnant ewes entering fall lambing.
+          </li>
+        </ul>
+      </div>
+    </div>
+  </body>
+</html>

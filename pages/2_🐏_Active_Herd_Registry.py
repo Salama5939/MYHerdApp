@@ -88,18 +88,20 @@ with tab1:
                 "Fattening",
                 "Ewes",
                 "Pregnant",
-                "Small - Female",
-                "Small - Male",
+                "(Small) - (Female))",
+                "(Small) - (Male)",
             ]
             category_labels = {
                 "Fattening": "Fattening (تسمين)" if is_arabic else "Fattening",
                 "Ewes": "Ewes (نعاج)" if is_arabic else "Ewes",
                 "Pregnant": "Pregnant (حامل)" if is_arabic else "Pregnant",
-                "Small - Female": (
-                    "Small - Female (صغير - أنثى)" if is_arabic else "Small - Female"
+                "(Small) - (Female))": (
+                    "(Small) - (Female) (صغير - أنثى)"
+                    if is_arabic
+                    else "(Small) - (Female)"
                 ),
-                "Small - Male": (
-                    "Small - Male (صغير - ذكر)" if is_arabic else "Small - Male"
+                "(Small) - (Male)": (
+                    "(Small) - (Male) (صغير - ذكر)" if is_arabic else "(Small) - (Male)"
                 ),
             }
             category = st.selectbox(
@@ -344,8 +346,8 @@ if not df_herd.empty:
             "Fattening": "تسمين",
             "Ewes": "نعاج",
             "Pregnant": "حامل",
-            "Small - Female": "صغير - أنثى",
-            "Small - Male": "صغير - ذكر",
+            "(Small) - (Female)": "صغير - أنثى",
+            "(Small) - (Male)": "صغير - ذكر",
         }
         stat_map = {
             "Active/Healthy": "نشط / سليم",

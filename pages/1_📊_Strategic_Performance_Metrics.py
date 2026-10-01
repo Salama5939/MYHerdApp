@@ -73,7 +73,7 @@ else:
 # 🔢 Calculations
 if not df_herd.empty:
     # 1. DEFINE OFF-TAKE STATUSES (To be excluded from metrics)
-    excluded_statuses = ["Died", "Slaughtered", "Sold", "Zakate", "Donate"]
+    excluded_statuses = ["Died", "Slaughtered", "Sold", "Zakate", "Donate", "LostTag#"]
 
     # 2. CREATE ACTIVE HERD FILTER
     active_df = df_herd[~df_herd["status"].isin(excluded_statuses)].copy()
